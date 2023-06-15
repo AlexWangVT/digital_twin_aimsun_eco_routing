@@ -1,6 +1,8 @@
 ## ignore Aimsun large runtime files
 //*.sqlite
 
+## ignore useless Files
+CppProperties.json
 
 
 
