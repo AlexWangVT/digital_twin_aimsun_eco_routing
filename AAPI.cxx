@@ -1,4 +1,4 @@
-  
+
 #include "AKIProxie.h"
 #include "CIProxie.h"
 #include "ANGConProxie.h"
@@ -18,7 +18,7 @@
 
 using namespace std;
 
-double simtime=0; //current simulation time, in second
+double simtime = 0; //current simulation time, in second
 unordered_map<int, int> optimal_lane_set; //secid-laneid
 unordered_map<int, double> link_flw;
 unordered_map<int, int> link_list;
@@ -27,7 +27,7 @@ unordered_map<int, int> to_turn;
 unordered_map<int, double> turn_pert;
 int N_lnk, N_turn, N_typ, N_step;
 ifstream flink, fturn;
-double **lnk_flow, **trn_per;
+double** lnk_flow, ** trn_per;
 const string PROJECT_DIR = "D:\\program\\Aimsun\\digital_twin_aimsun";
 
 void printDebugLog(string s) {
@@ -44,7 +44,7 @@ int AAPILoad()
 }
 
 int AAPIInit()
-{	
+{
 
 	printDebugLog("in AAPILoad");
 	ANGConnEnableVehiclesInBatch(true);
@@ -57,7 +57,7 @@ int AAPIInit()
 	lnk_flow = new double* [int(N_step)];
 	trn_per = new double* [int(N_step)];
 
-	
+
 	// read the list of links and turns for traffic state update
 	int lnk0, lnk1, lnk2;
 	double flw, pert;
@@ -70,7 +70,7 @@ int AAPIInit()
 	}
 	flink.close();
 	printDebugLog("Total number links found in Link.txt is " + to_string(N_lnk - 1));
-	
+
 	N_turn = 0;
 	fturn.open(PROJECT_DIR + "\\demand_data\\Turn.txt");
 	while (fturn >> lnk1 >> lnk2 >> pert) {
@@ -80,7 +80,7 @@ int AAPIInit()
 		N_turn++;
 	}
 	fturn.close();
-	printDebugLog("Total number turns found in Turn.txt is " + to_string(N_lnk - 1));
+	printDebugLog("Total number turns found in Turn.txt is " + to_string(N_turn - 1));
 
 	for (int i = 0; i < N_step; i++) {
 		lnk_flow[i] = new double[N_lnk];
@@ -96,7 +96,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 	simtime = AKIGetCurrentSimulationTime();
 	int N_hist, N_pre;
 
-	
+
 	// update traffic state at a specific time interval (5 min) with real-world traffic
 	if (int(simtime * 10) % 3000 == 0) {
 
@@ -104,7 +104,8 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		int lnk0, lnk1, lnk2;
 		double flw, pert;
 		N_hist = int(N_step / 2);
-		flink.open("\\demand_data\\Link_update.txt");
+		//flink.open("\\demand_data\\Link_update.txt");
+		flink.open("\\demand_data\\Link.txt");
 		for (int j = 0; j < N_lnk; j++)
 			for (int i = 0; i < N_hist; i++) {
 				flink >> lnk_flow[i][j];
@@ -112,7 +113,8 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		flink.close();
 
 		N_turn = 0;
-		fturn.open("\\demand_data\\Turn_update.txt");
+		//fturn.open("\\demand_data\\Turn_update.txt");
+		fturn.open("\\demand_data\\Turn.txt");
 		for (int j = 0; j < N_turn; j++)
 			for (int i = 0; i < N_hist; i++) {
 				flink >> trn_per[i][j];
@@ -140,24 +142,26 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				trn_per[t][j] = tmpp / 5;
 			}
 		}
-		
+
 
 		// update the link and turn information
 		for (int t = N_hist; t < N_step; t++) {
 			for (int i = 0; i < N_lnk; i++) {
-				AKIStateDemandSetDemandSection(link_list[i], 1, t+1, lnk_flow[t][i]);
+				AKIStateDemandSetDemandSection(link_list[i], 1, t + 1, lnk_flow[t][i]);
+				printDebugLog("Update some demand to value: " + to_string(lnk_flow[t][i]));
 			}
 			for (int i = 0; i < N_turn; i++) {
-				AKIStateDemandSetTurningPercentage(from_turn[i], to_turn[i], 1, t+1, trn_per[t][i]);
+				AKIStateDemandSetTurningPercentage(from_turn[i], to_turn[i], 1, t + 1, trn_per[t][i]);
 			}
 		}
 	}
-	
+
 	// update link-level traffic conditions at every 1 minutes, applied for dynamic routing with minimum travel time
 	// can be updated wtih energy consumption by changing the cost to vehicle energy usage
 	double link_tt, link_spd;
 	if (int(simtime * 10) % 600 == 0) {
 		int secnb = AKIInfNetNbSectionsANG();
+		//printDebugLog("The number of sections from API is: " + to_string(secnb));
 		for (int i = 0; i < secnb; i++) {
 			int secid = AKIInfNetGetSectionANGId(i);
 			A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
@@ -183,7 +187,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 
 	// rewind the simulation at every one hour, i.e., only predict traffic in one hour
 	if (simtime == 3600) {
-		ANGSetSimulationOrder(2, 0);	
+		ANGSetSimulationOrder(2, 0);
 	}
 
 	return 0;
@@ -191,7 +195,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 
 int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 {
-	
+
 	return 0;
 }
 

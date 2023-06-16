@@ -11,6 +11,6 @@
 ## How to launch a simulation
 - Open `aimsun_model/I66SubNetwork_aramco.ang` with Aimsun
 - In the project window, find the `Base` scenario under Project -> Scenarios -> Base. Double click `Base`,
-    go into the `Aimsun Next APIs` tag, delete all unknown APIs, add the locally build .dll library
+    go into the `Aimsun Next APIs` tag, delete all unknown APIs, add the locally built .dll library
 - Save and run the simulation
 
