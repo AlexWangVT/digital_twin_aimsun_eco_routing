@@ -28,10 +28,17 @@ unordered_map<int, double> turn_pert;
 int N_lnk, N_turn, N_typ, N_step;
 ifstream flink, fturn;
 double **lnk_flow, **trn_per;
+const string PROJECT_DIR = "D:\\program\\Aimsun\\digital_twin_aimsun";
+
+void printDebugLog(string s) {
+	AKIPrintString(("## Debug log ##: " + s).c_str());
+}
 
 int AAPILoad()
 {
 	srand((uint32_t)time(NULL));
+
+	printDebugLog("in AAPILoad");
 
 	return 0;
 }
@@ -39,6 +46,7 @@ int AAPILoad()
 int AAPIInit()
 {	
 
+	printDebugLog("in AAPILoad");
 	ANGConnEnableVehiclesInBatch(true);
 
 	int nslice = AKIStateDemandGetNumSlices(1);
@@ -54,16 +62,17 @@ int AAPIInit()
 	int lnk0, lnk1, lnk2;
 	double flw, pert;
 	N_lnk = 0;
-	flink.open("Link.txt");
+	flink.open(PROJECT_DIR + "\\demand_data\\Link.txt");
 	while (flink >> lnk0 >> flw) {
 		link_list[N_lnk] = lnk0;
 		link_flw[N_lnk] = flw;
 		N_lnk++;
 	}
 	flink.close();
-
+	printDebugLog("Total number links found in Link.txt is " + to_string(N_lnk - 1));
+	
 	N_turn = 0;
-	fturn.open("Turn.txt");
+	fturn.open(PROJECT_DIR + "\\demand_data\\Turn.txt");
 	while (fturn >> lnk1 >> lnk2 >> pert) {
 		from_turn[N_turn] = lnk1;
 		to_turn[N_turn] = lnk2;
@@ -71,6 +80,7 @@ int AAPIInit()
 		N_turn++;
 	}
 	fturn.close();
+	printDebugLog("Total number turns found in Turn.txt is " + to_string(N_lnk - 1));
 
 	for (int i = 0; i < N_step; i++) {
 		lnk_flow[i] = new double[N_lnk];
@@ -94,7 +104,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		int lnk0, lnk1, lnk2;
 		double flw, pert;
 		N_hist = int(N_step / 2);
-		flink.open("Link_update.txt");
+		flink.open("\\demand_data\\Link_update.txt");
 		for (int j = 0; j < N_lnk; j++)
 			for (int i = 0; i < N_hist; i++) {
 				flink >> lnk_flow[i][j];
@@ -102,7 +112,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		flink.close();
 
 		N_turn = 0;
-		fturn.open("Turn_update.txt");
+		fturn.open("\\demand_data\\Turn_update.txt");
 		for (int j = 0; j < N_turn; j++)
 			for (int i = 0; i < N_hist; i++) {
 				flink >> trn_per[i][j];
