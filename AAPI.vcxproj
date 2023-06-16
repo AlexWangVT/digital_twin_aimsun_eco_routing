@@ -71,14 +71,14 @@
     <IntDir>.\Debug\</IntDir>
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>true</LinkIncremental>
-	  <IncludePath>.\include;$(IncludePath)</IncludePath>
+    <IncludePath>.\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
     <IntDir>$(Configuration)\</IntDir>
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>false</LinkIncremental>
-	  <IncludePath>.\include;$(IncludePath)</IncludePath>
+    <IncludePath>.\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(Platform)\$(Configuration)\</OutDir>
@@ -92,7 +92,7 @@
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
     <IgnoreImportLibrary>true</IgnoreImportLibrary>
     <LinkIncremental>false</LinkIncremental>
-	  <IncludePath>.\include;$(IncludePath)</IncludePath>
+    <IncludePath>.\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -209,14 +209,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AAPI.cxx" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="include\AAPI.h" />
     <ClInclude Include="include\AAPI_Util.h" />
     <ClInclude Include="include\AKIProxie.h" />
     <ClInclude Include="include\ANGConProxie.h" />
     <ClInclude Include="include\CIProxie.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AAPI.cxx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
