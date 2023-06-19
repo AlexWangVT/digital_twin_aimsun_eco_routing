@@ -102,69 +102,68 @@ int AAPIInit()
 
 int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 {
-	//simtime = AKIGetCurrentSimulationTime();
-	//int N_hist, N_pre;
+	simtime = AKIGetCurrentSimulationTime();
+	int N_hist, N_pre;
 
 
-	//// update traffic state at a specific time interval (5 min) with real-world traffic
-	//if (int(simtime * 10) % 3000 == 0) {
+	// update traffic state at a specific time interval (5 min) with real-world traffic
+	if (int(simtime * 10) % 3000 == 0) {
 
-	//	// update the real-world conditions: read link flow and turn percentages in the past N_steps (5 minute interval)
-	//	int lnk0, lnk1, lnk2;
-	//	double flw, pert;
-	//	N_hist = int(N_step / 2);
-	//	//flink.open("\\demand_data\\Link_update.txt");
-	//	flink.open("\\demand_data\\Link.txt");
-	//	for (int j = 0; j < N_lnk; j++)
-	//		for (int i = 0; i < N_hist; i++) {
-	//			flink >> lnk_flow[i][j];
+		// update the real-world conditions: read link flow and turn percentages in the past N_steps (5 minute interval)
+		int lnk0, lnk1, lnk2;
+		double flw, pert;
+		N_hist = int(N_step / 2);
+		//flink.open("\\demand_data\\Link_update.txt");
+		flink.open("\\demand_data\\Link.txt");
+		for (int j = 0; j < N_lnk; j++)
+			for (int i = 0; i < N_hist; i++) {
+				flink >> lnk_flow[i][j];
+			}
+		flink.close();
 
-	//		}
-	//	flink.close();
+		N_turn = 0;
+		//fturn.open("\\demand_data\\Turn_update.txt");
+		fturn.open("\\demand_data\\Turn.txt");
+		for (int j = 0; j < N_turn; j++)
+			for (int i = 0; i < N_hist; i++) {
+				flink >> trn_per[i][j];
+			}
+		fturn.close();
 
-	//	N_turn = 0;
-	//	//fturn.open("\\demand_data\\Turn_update.txt");
-	//	fturn.open("\\demand_data\\Turn.txt");
-	//	for (int j = 0; j < N_turn; j++)
-	//		for (int i = 0; i < N_hist; i++) {
-	//			flink >> trn_per[i][j];
-	//		}
-	//	fturn.close();
-
-	//	// predict the road traffic conditions
-	//	// current use moving average (will be replaced with the trained machine learning models)
-	//	double tmpf, tmpp;
-	//	for (int j = 0; j < N_lnk; j++) {
-	//		for (int t = N_hist; t < N_step; t++) {
-	//			tmpf = 0;
-	//			for (int k = 1; k <= 5; k++) {
-	//				tmpf += lnk_flow[t - k][j];
-	//			}
-	//			lnk_flow[t][j] = tmpf / 5;
-	//		}
-	//	}
-	//	for (int j = 0; j < N_turn; j++) {
-	//		for (int t = N_hist; t < N_step; t++) {
-	//			tmpp = 0;
-	//			for (int k = 1; k <= 5; k++) {
-	//				tmpf += trn_per[t - k][j];
-	//			}
-	//			trn_per[t][j] = tmpp / 5;
-	//		}
-	//	}
+		// predict the road traffic conditions
+		// current use moving average (will be replaced with the trained machine learning models)
+		double tmpf, tmpp;
+		for (int j = 0; j < N_lnk; j++) {
+			for (int t = N_hist; t < N_step; t++) {
+				tmpf = 0;
+				for (int k = 1; k <= 5; k++) {
+					tmpf += lnk_flow[t - k][j];
+				}
+				lnk_flow[t][j] = tmpf / 5;
+			}
+		}
+		for (int j = 0; j < N_turn; j++) {
+			for (int t = N_hist; t < N_step; t++) {
+				tmpp = 0;
+				for (int k = 1; k <= 5; k++) {
+					tmpf += trn_per[t - k][j];
+				}
+				trn_per[t][j] = tmpp / 5;
+			}
+		}
 
 
-	//	// update the link and turn information
-	//	for (int t = N_hist; t < N_step; t++) {
-	//		for (int i = 0; i < N_lnk; i++) {
-	//			AKIStateDemandSetDemandSection(link_list[i], 1, t + 1, lnk_flow[t][i]);
-	//			//printDebugLog("Update some demand to value: " + to_string(lnk_flow[t][i]));
-	//		}
-	//		for (int i = 0; i < N_turn; i++) {
-	//			AKIStateDemandSetTurningPercentage(from_turn[i], to_turn[i], 1, t + 1, trn_per[t][i]);
-	//		}
-	//	}
-	//}
+		// update the link and turn information
+		for (int t = N_hist; t < N_step; t++) {
+			for (int i = 0; i < N_lnk; i++) {
+				AKIStateDemandSetDemandSection(link_list[i], 1, t + 1, lnk_flow[t][i]);
+				printDebugLog("Update some demand to value: " + to_string(lnk_flow[t][i]));
+			}
+			for (int i = 0; i < N_turn; i++) {
+				AKIStateDemandSetTurningPercentage(from_turn[i], to_turn[i], 1, t + 1, trn_per[t][i]);
+			}
+		}
+	}
 
 	// update link-level traffic conditions at every 1 minutes, applied for dynamic routing with minimum travel time
 	// can be updated wtih energy consumption by changing the cost to vehicle energy usage
@@ -195,27 +194,10 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		}
 	}
 
-	simtime = AKIGetCurrentSimulationTime();
-	if (simtime == 600) {
-		printDebugLog("Close main road!!!");
-		auto re1 = AKIStateDemandSetTurningPercentage(3306, 3307, 1, 0, 0);
-		auto re2 = AKISetSectionUserDefinedCost(34745, 999999);
-		auto re3 = AKISetSectionUserDefinedCost(393017, 999999);
-		auto re4 = AKISetSectionUserDefinedCost(393158, 999999);
-
-		//auto re2 = AKIStateDemandSetTurningPercentage(3306, 8883, 1, 0, 100);
-		printDebugLog("Re1 and Re2 are : " + to_string(re1) + "  ,  " + to_string(re2) + "  ,  " + to_string(re3) + "  ,  " + to_string(re4));
+	// rewind the simulation at every one hour, i.e., only predict traffic in one hour
+	if (simtime == 3600) {
+		ANGSetSimulationOrder(2, 0);
 	}
-	if (simtime > 600) {
-		auto re2 = AKISetSectionUserDefinedCost(34745, 999999);
-		auto re3 = AKISetSectionUserDefinedCost(393017, 999999);
-		//auto re4 = AKISetSectionUserDefinedCost(393158, 99999);
-	}
-
-	//// rewind the simulation at every one hour, i.e., only predict traffic in one hour
-	//if (simtime == 3600) {
-	//	ANGSetSimulationOrder(2, 0);
-	//}
 
 	return 0;
 }
