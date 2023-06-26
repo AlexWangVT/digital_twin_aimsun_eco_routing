@@ -211,13 +211,13 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 	//}
 
 	if (simtime > 600) {
-		AKISetSectionUserDefinedCost(34745, 999999);
-		AKISetSectionUserDefinedCost(393017, 999999);
+		AKISetSectionUserDefinedCost(34745, 9999);
+		AKISetSectionUserDefinedCost(393017, 9999);
 		//auto re4 = AKISetSectionUserDefinedCost(393158, 99999);
 
-		AKISetSectionUserDefinedCost(118843, 999999);
-		AKISetSectionUserDefinedCost(46367, 999999);
-		AKISetSectionUserDefinedCost(393095, 999999);
+		AKISetSectionUserDefinedCost(118843, 9999);
+		AKISetSectionUserDefinedCost(46367, 9999);
+		AKISetSectionUserDefinedCost(393095, 9999);
 	}
 
 	//// rewind the simulation at every one hour, i.e., only predict traffic in one hour
