@@ -1,8 +1,8 @@
 ## ignore Aimsun large runtime files
-//*.sqlite
-//*.ang.lck
-//*.ang.old
-//*.sang
+**/*.sqlite
+**/*.ang.lck
+**/*.ang.old
+**/*.sang
 
 ## ignore useless Files
 CppProperties.json
@@ -378,7 +378,3 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/aimsun_model/I66SubNetwork_aramco.ang.lck
-/aimsun_model/I66SubNetwork_aramco.ang.old
-*.sang
-/aimsun_model/I66SubNetwork_aramco.sqlite
