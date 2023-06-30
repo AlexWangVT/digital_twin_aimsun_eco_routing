@@ -387,9 +387,9 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 	}
 
 	//// rewind the simulation at every one hour, i.e., only predict traffic in one hour
-	if (simtime == 3600) {
-		ANGSetSimulationOrder(2, 0);
-	}
+	//if (simtime == 3600) {
+	//	ANGSetSimulationOrder(2, 0);
+	//}
 
 	return 0;
 }
