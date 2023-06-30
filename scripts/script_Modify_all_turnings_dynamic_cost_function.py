@@ -1,4 +1,5 @@
-updated_dynamic_function = model.getCatalog().find(394219)
+#updated_dynamic_function = model.getCatalog().find(394219)
+updated_dynamic_function = model.getCatalog().find(393531)
 
 turningType = model.getType( "GKTurning" )
 for types in model.getCatalog().getUsedSubTypesFromType( turningType ):
