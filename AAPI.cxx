@@ -209,97 +209,97 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 {
 	simtime = AKIGetCurrentSimulationTime();
 
-	{ // this block will add a large user defined cost to specific sections
-		if (time - timTrans > 600) {
-			AKISetSectionUserDefinedCost(34745, 9999);
-			AKISetSectionUserDefinedCost(393017, 9999);
-			//auto re4 = AKISetSectionUserDefinedCost(393158, 99999);
+	//{ // this block will add a large user defined cost to specific sections
+	//	if (time - timTrans > 600) {
+	//		AKISetSectionUserDefinedCost(34745, 9999);
+	//		AKISetSectionUserDefinedCost(393017, 9999);
+	//		//auto re4 = AKISetSectionUserDefinedCost(393158, 99999);
 
-			AKISetSectionUserDefinedCost(118843, 9999);
-			AKISetSectionUserDefinedCost(46367, 9999);
-			AKISetSectionUserDefinedCost(393095, 9999);
-		}
-	}
+	//		AKISetSectionUserDefinedCost(118843, 9999);
+	//		AKISetSectionUserDefinedCost(46367, 9999);
+	//		AKISetSectionUserDefinedCost(393095, 9999);
+	//	}
+	//}
 
 
 	int N_hist, N_pre;
 
-	double fac, sim_step = 0.5, eng_intval = 30;
-	double E_i, E_e, E_p1, E_p2, E_f, E_cost[5];
-	double P_gas = 4.5, P_elt = 0.12;		// price of gas and electricity
+	//double fac, sim_step = 0.5, eng_intval = 30;
+	//double E_i, E_e, E_p1, E_p2, E_f, E_cost[5];
+	//double P_gas = 4.5, P_elt = 0.12;		// price of gas and electricity
 
-	// update the link cost with the energy consumption at the interval of eng_interval
-	if (int(simtime * 10) % int(eng_intval * 10) == 0) {
-		int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
-		for (int i = 0; i < secnb; i++) {
-			int secid = AKIInfNetGetSectionANGId(i);
-			if (secid > 0) {
-				A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
-				double grade = secinf.slopePercentages[0] / 100;
-				int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-				for (int k = 0; k < nbveh; k++) {
-					InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-					StaticInfVeh vehstat = AKIVehGetVehicleStaticInfSection(secid, k);
-					int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
+	//// update the link cost with the energy consumption at the interval of eng_interval
+	//if (int(simtime * 10) % int(eng_intval * 10) == 0) {
+	//	int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
+	//	for (int i = 0; i < secnb; i++) {
+	//		int secid = AKIInfNetGetSectionANGId(i);
+	//		if (secid > 0) {
+	//			A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
+	//			double grade = secinf.slopePercentages[0] / 100;
+	//			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+	//			for (int k = 0; k < nbveh; k++) {
+	//				InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
+	//				StaticInfVeh vehstat = AKIVehGetVehicleStaticInfSection(secid, k);
+	//				int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
 
 
-					double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
-					Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
-					double fac;
-					if (vehinf.CurrentSpeed > 0) {
-						fac = secinf.length / (vehinf.CurrentSpeed / 3.6);
-					}
-					else {
-						fac = secinf.length / (5.0 / 3.6);
-					}
-					E_cost[0] += E_i * fac;
-					E_cost[1] += E_e * fac;
-					E_cost[2] += E_p1 * fac;
-					E_cost[3] += E_p2 * fac;
-					E_cost[4] += E_f * fac;
+	//				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
+	//				Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
+	//				double fac;
+	//				if (vehinf.CurrentSpeed > 0) {
+	//					fac = secinf.length / (vehinf.CurrentSpeed / 3.6);
+	//				}
+	//				else {
+	//					fac = secinf.length / (5.0 / 3.6);
+	//				}
+	//				E_cost[0] += E_i * fac;
+	//				E_cost[1] += E_e * fac;
+	//				E_cost[2] += E_p1 * fac;
+	//				E_cost[3] += E_p2 * fac;
+	//				E_cost[4] += E_f * fac;
 
-					if (ice_eng[vehinf.idVeh] == 0) {
-						veh_tt[vehinf.idVeh] = sim_step;
-						ice_eng[vehinf.idVeh] = E_i * sim_step;
-						bev_eng[vehinf.idVeh] = E_e * sim_step;
-						phev_eng1[vehinf.idVeh] = E_p1 * sim_step;
-						phev_eng2[vehinf.idVeh] = E_p2 * sim_step;
-						hfcv_eng[vehinf.idVeh] = E_f * sim_step;
-					}
-					else {
-						veh_tt[vehinf.idVeh] += sim_step;
-						ice_eng[vehinf.idVeh] += E_i * sim_step;
-						bev_eng[vehinf.idVeh] += E_e * sim_step;
-						phev_eng1[vehinf.idVeh] += E_p1 * sim_step;
-						phev_eng2[vehinf.idVeh] += E_p2 * sim_step;
-						hfcv_eng[vehinf.idVeh] += E_f * sim_step;
-					}
+	//				if (ice_eng[vehinf.idVeh] == 0) {
+	//					veh_tt[vehinf.idVeh] = sim_step;
+	//					ice_eng[vehinf.idVeh] = E_i * sim_step;
+	//					bev_eng[vehinf.idVeh] = E_e * sim_step;
+	//					phev_eng1[vehinf.idVeh] = E_p1 * sim_step;
+	//					phev_eng2[vehinf.idVeh] = E_p2 * sim_step;
+	//					hfcv_eng[vehinf.idVeh] = E_f * sim_step;
+	//				}
+	//				else {
+	//					veh_tt[vehinf.idVeh] += sim_step;
+	//					ice_eng[vehinf.idVeh] += E_i * sim_step;
+	//					bev_eng[vehinf.idVeh] += E_e * sim_step;
+	//					phev_eng1[vehinf.idVeh] += E_p1 * sim_step;
+	//					phev_eng2[vehinf.idVeh] += E_p2 * sim_step;
+	//					hfcv_eng[vehinf.idVeh] += E_f * sim_step;
+	//				}
 
-					vtyp_eng[vehinf.idVeh] = vehinf.type;
-				}
+	//				vtyp_eng[vehinf.idVeh] = vehinf.type;
+	//			}
 
-				if (nbveh == 0) {
-					E_cost[0] = ice_base[secid];
-					E_cost[1] = pev_base[secid];
-					E_cost[2] = phev_base1[secid];
-					E_cost[3] = phev_base2[secid];
-					E_cost[4] = hfcv_base[secid];
-				}
-				else {
-					E_cost[0] = E_cost[0] / nbveh;
-					E_cost[1] = E_cost[1] / nbveh;
-					E_cost[2] = E_cost[2] / nbveh;
-					E_cost[3] = E_cost[3] / nbveh;
-					E_cost[4] = E_cost[4] / nbveh;
-				}
+	//			if (nbveh == 0) {
+	//				E_cost[0] = ice_base[secid];
+	//				E_cost[1] = pev_base[secid];
+	//				E_cost[2] = phev_base1[secid];
+	//				E_cost[3] = phev_base2[secid];
+	//				E_cost[4] = hfcv_base[secid];
+	//			}
+	//			else {
+	//				E_cost[0] = E_cost[0] / nbveh;
+	//				E_cost[1] = E_cost[1] / nbveh;
+	//				E_cost[2] = E_cost[2] / nbveh;
+	//				E_cost[3] = E_cost[3] / nbveh;
+	//				E_cost[4] = E_cost[4] / nbveh;
+	//			}
 
-				AKISetSectionUserDefinedCost(secid, E_cost[0] * P_gas / 3.8);		// Fuel consumption
-				AKISetSectionUserDefinedCost2(secid, E_cost[1] * P_elt / 3600);	// EV Energy
-				//AKISetSectionUserDefinedCost3(secid, E_cost[2] * P_elt / 3600 + E_cost[3] * P_gas / 3.8);	// PHEV Energy in $, 0.25/kWh, $6/gallon
-				AKISetSectionUserDefinedCost3(secid, E_cost[4] * P_elt / 3600);	// HFCV Energy
-			}
-		}
-	}
+	//			AKISetSectionUserDefinedCost(secid, E_cost[0] * P_gas / 3.8);		// Fuel consumption
+	//			AKISetSectionUserDefinedCost2(secid, E_cost[1] * P_elt / 3600);	// EV Energy
+	//			//AKISetSectionUserDefinedCost3(secid, E_cost[2] * P_elt / 3600 + E_cost[3] * P_gas / 3.8);	// PHEV Energy in $, 0.25/kWh, $6/gallon
+	//			AKISetSectionUserDefinedCost3(secid, E_cost[4] * P_elt / 3600);	// HFCV Energy
+	//		}
+	//	}
+	//}
 
 
 	// update traffic state at a specific time interval (5 min) with real-world traffic
@@ -415,7 +415,96 @@ int AAPIUnLoad()
 
 int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 {
-	//AKIPrintString("\tPreRouteChoice Calculation");
+	double timTrans = AKIGetDurationTransTime();
+	//{ // this block will add a large user defined cost to specific sections
+	//	if (time - timTrans > 600) {
+	//		printDebugLog("Setting user defined cost in AAPIPreRouteChoiceCalculation");
+	//		AKISetSectionUserDefinedCost(34745, 9999);
+	//		printDebugLog("After setting, the cost is: " + to_string(AKIGetSectionUserDefinedCost(34745)));
+	//		AKISetSectionUserDefinedCost(393017, 9999);
+	//		//auto re4 = AKISetSectionUserDefinedCost(393158, 99999);
+
+	//		AKISetSectionUserDefinedCost(118843, 9999);
+	//		AKISetSectionUserDefinedCost(46367, 9999);
+	//		AKISetSectionUserDefinedCost(393095, 9999);
+	//	}
+	//}
+
+	double fac, sim_step = 0.5, eng_intval = 30;
+	double E_i, E_e, E_p1, E_p2, E_f, E_cost[5];
+	double P_gas = 4.5, P_elt = 0.12;		// price of gas and electricity
+
+	// update the link cost with the energy consumption at the interval of eng_interval
+	int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
+	for (int i = 0; i < secnb; i++) {
+		int secid = AKIInfNetGetSectionANGId(i);
+		if (secid > 0) {
+			A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
+			double grade = secinf.slopePercentages[0] / 100;
+			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+			for (int k = 0; k < nbveh; k++) {
+				InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
+				StaticInfVeh vehstat = AKIVehGetVehicleStaticInfSection(secid, k);
+				int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
+
+
+				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
+				Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
+				double fac;
+				if (vehinf.CurrentSpeed > 0) {
+					fac = secinf.length / (vehinf.CurrentSpeed / 3.6);
+				}
+				else {
+					fac = secinf.length / (5.0 / 3.6);
+				}
+				E_cost[0] += E_i * fac;
+				E_cost[1] += E_e * fac;
+				E_cost[2] += E_p1 * fac;
+				E_cost[3] += E_p2 * fac;
+				E_cost[4] += E_f * fac;
+
+				if (ice_eng[vehinf.idVeh] == 0) {
+					veh_tt[vehinf.idVeh] = sim_step;
+					ice_eng[vehinf.idVeh] = E_i * sim_step;
+					bev_eng[vehinf.idVeh] = E_e * sim_step;
+					phev_eng1[vehinf.idVeh] = E_p1 * sim_step;
+					phev_eng2[vehinf.idVeh] = E_p2 * sim_step;
+					hfcv_eng[vehinf.idVeh] = E_f * sim_step;
+				}
+				else {
+					veh_tt[vehinf.idVeh] += sim_step;
+					ice_eng[vehinf.idVeh] += E_i * sim_step;
+					bev_eng[vehinf.idVeh] += E_e * sim_step;
+					phev_eng1[vehinf.idVeh] += E_p1 * sim_step;
+					phev_eng2[vehinf.idVeh] += E_p2 * sim_step;
+					hfcv_eng[vehinf.idVeh] += E_f * sim_step;
+				}
+
+				vtyp_eng[vehinf.idVeh] = vehinf.type;
+			}
+
+			if (nbveh == 0) {
+				E_cost[0] = ice_base[secid];
+				E_cost[1] = pev_base[secid];
+				E_cost[2] = phev_base1[secid];
+				E_cost[3] = phev_base2[secid];
+				E_cost[4] = hfcv_base[secid];
+			}
+			else {
+				E_cost[0] = E_cost[0] / nbveh;
+				E_cost[1] = E_cost[1] / nbveh;
+				E_cost[2] = E_cost[2] / nbveh;
+				E_cost[3] = E_cost[3] / nbveh;
+				E_cost[4] = E_cost[4] / nbveh;
+			}
+
+			AKISetSectionUserDefinedCost(secid, E_cost[0] * P_gas / 3.8);		// Fuel consumption
+			AKISetSectionUserDefinedCost2(secid, E_cost[1] * P_elt / 3600);	// EV Energy
+			AKISetSectionUserDefinedCost3(secid, E_cost[2] * P_elt / 3600 + E_cost[3] * P_gas / 3.8);	// PHEV Energy in $, 0.25/kWh, $6/gallon
+			//AKISetSectionUserDefinedCost3(secid, E_cost[4] * P_elt / 3600);	// HFCV Energy
+		}
+	}
+
 	return 0;
 }
 
