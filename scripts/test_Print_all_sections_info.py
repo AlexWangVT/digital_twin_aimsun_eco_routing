@@ -4,3 +4,4 @@ for types in model.getCatalog().getUsedSubTypesFromType( sectionType ):
         print(("Section ID: %i Name: %s") % (s.getId(), s.getName()))
         print(s.__class__.__name__)
     #print(s.getId(), s.getName())
+    print("Total number of {}: {}.".format(sectionType.getName(), len(types.values())))
