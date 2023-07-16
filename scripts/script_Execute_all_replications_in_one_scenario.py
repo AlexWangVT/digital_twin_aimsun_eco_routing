@@ -1,7 +1,11 @@
 import random
 import time
 
-scenario = model.getCatalog().find(394325)
+print("##### This is the start of script_Execute_all_replications_in_one_scenario #####")
+
+#scenario = model.getCatalog().find(394325) # 100% demand
+#scenario = model.getCatalog().find(394609) # 20% demand
+scenario = model.getCatalog().find(394754) # 40% demand
 N = 11
 CAV_range = [0, 100, 10]
 random.seed(time.time())
@@ -35,6 +39,7 @@ for exp in scenario.getExperiments():
 
 # use the same random seeds in all CAV penetrations
 #for shortname in repli_map:
+#	print("Unified the random seed of all replications in {} experiments".format(shortname))
 #	for idx, repli in enumerate(repli_map[shortname]):
 #		repli_map[shortname][idx].setRandomSeed(seed_list[idx])
 
@@ -48,10 +53,12 @@ print("Total number of replications are {}.".format(len(all_replications)))
 
  
 #GKSystem.getSystem().executeAction( "execute", repli_map["010"][0], repli_map["010"], "" )
-#for penetration in range(10, 110, 10):
-#	GKSystem.getSystem().executeAction( "execute", repli_map[get_padding(penetration)][0], repli_map[get_padding(penetration)], "")
-#	GKSystem.getSystem().executeAction( "unload", repli_map[get_padding(penetration)][0], repli_map[get_padding(penetration)], "")
-
+for penetration in range(0, 110, 10):
+	exp_start_time = time.time()
+	GKSystem.getSystem().executeAction( "execute", repli_map[get_padding(penetration)][0], repli_map[get_padding(penetration)], "")
+	GKSystem.getSystem().executeAction( "unload", repli_map[get_padding(penetration)][0], repli_map[get_padding(penetration)], "")
+	exp_end_time = time.time()
+	print("Time elapsed for current experiment {} is: {} seconds".format(get_padding(penetration), exp_end_time - exp_start_time))
 #GKSystem.getSystem().executeAction( "play", replication, [], "" )
 #GKSystem.getSystem().executeAction( "retrieve", all_replications[0], all_replications, "" )
 
@@ -62,3 +69,4 @@ print("Total number of replications are {}.".format(len(all_replications)))
 
 end_time = time.time()
 print("Total time elapsed: {} seconds".format(end_time - start_time))
+print("##### End of script_Execute_all_replications_in_one_scenario #####")
