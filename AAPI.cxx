@@ -44,14 +44,14 @@ unordered_map<int, double> hfcv_energy_per_vehicle;
 
 enum class VehicleType {
 	UNKNOWN = 0,
-	ICE,
-	BEV,
-	PHEV,
-	HFCV,
-	ICE_NONCAV,
-	BEV_NONCAV,
-	PHEV_NONCAV,
-	HFCV_NONCAV
+	ICE = 393772,
+	BEV = 393773,
+	PHEV = 393774,
+	HFCV = 393895,
+	ICE_NONCAV = 393941,
+	BEV_NONCAV = 393942,
+	PHEV_NONCAV = 393943,
+	HFCV_NONCAV = 393944
 };
 
 class Vehicle {
@@ -133,11 +133,12 @@ public:
 		overall_travel_time_ = 0;
 		overall_fuel_consumed_ = 0;
 		overall_electricity_used_ = 0;
-		travel_time_per_vehicle_type_.clear();
-		fuel_consumed_per_vehicle_type_.clear(); electricity_used_per_vehicle_type_.clear();
 		N_links_ = 0;
 		N_vehicles_ = 0;
 		N_vehicle_types_ = 8;
+		travel_time_per_vehicle_type_.clear();
+		fuel_consumed_per_vehicle_type_.clear();
+		electricity_used_per_vehicle_type_.clear();
 
 		price_gas_ = 3.5;		// define gas price here
 		price_electricity_ = 0.12; // define electric price here
@@ -177,12 +178,14 @@ void printDebugLog(string s) {
 	AKIPrintString(("## Debug log ##: " + s).c_str());
 }
 
-// calculate energy based on vehicle type, energy2 is only for PHEV and is default to a dummy variable
-void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& energy1, double& energy2 = _null_energy_varibale)
+// calculate energy based on vehicle type, energy1 is for gas usage and energy2 is for electricity usage
+void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& energy1, double& energy2)
 {
 	//double spd = 100.0 / 3.6; // in the unit of m/s
 	//double acc = 0;           // in the unit of m/s^2
 	//double grade = 0;         // without percentage
+	energy1 = 0;
+	energy2 = 0;
 
 	double spd_in_km_per_h;
 	double spd_in_m_per_s;
@@ -238,7 +241,7 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		P_w = P_w / 1000.0;			// now P_W is in the unit of kW
 		if (P_w >= 0)
 		{
-			energy1 = P_w / (eta_dl * eta_em); // in the unit of kW
+			energy2 = P_w / (eta_dl * eta_em); // in the unit of kW
 		}
 		else
 		{
@@ -246,10 +249,10 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 				eta_rb = 1.0 / exp(0.0411 / abs(acc));
 			else
 				eta_rb = 0;
-			energy1 = P_w * eta_rb; // in the unit of kW
+			energy2 = P_w * eta_rb; // in the unit of kW
 		}
 		//cout << "PEV P_w is: " << P_w << " kW" << endl;
-		//cout << "PEV electric motor power is: " << energy1 << " kW" << endl;
+		//cout << "PEV electric motor power is: " << energy2 << " kW" << endl;
 		break;
 
 	case VehicleType::PHEV:
@@ -335,7 +338,7 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 				P_fuel = P_w * beta;
 			}
 		}
-		energy1 = P_batt + P_fuel;    // in the unit of kW
+		energy2 = P_batt + P_fuel;    // in the unit of kW
 		//cout << "HFCV P_w is: " << P_w << " kW" << endl;
 		//cout << "HFCV need battery power: " << P_batt << " kW" << endl;
 		//cout << "HFCV fuel cell power is : " << P_fuel << " kW" << endl;
@@ -343,8 +346,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		break;
 
 	default:
-		energy1 = 0;
-		energy2 = 0;
 		break;
 	}
 }
@@ -352,10 +353,11 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 // this function will return energy cost for all vehicle type
 void Emission(double spd, double grade, double acc, double& E_ice, double& E_bev, double& E_phev1, double& E_phev2, double& E_hfcv)
 {
-	Emission(spd, grade, acc, VehicleType::ICE, E_ice);
-	Emission(spd, grade, acc, VehicleType::BEV, E_bev);
+	double dummy_energy_variable;
+	Emission(spd, grade, acc, VehicleType::ICE, E_ice, dummy_energy_variable);
+	Emission(spd, grade, acc, VehicleType::BEV, dummy_energy_variable, E_bev);
 	Emission(spd, grade, acc, VehicleType::PHEV, E_phev1, E_phev2);
-	Emission(spd, grade, acc, VehicleType::HFCV, E_hfcv);
+	Emission(spd, grade, acc, VehicleType::HFCV, dummy_energy_variable, E_hfcv);
 }
 
 int AAPILoad()
@@ -430,13 +432,7 @@ int AAPIInit()
 		AKISetSectionUserDefinedCost(secid, 99);
 		AKISetSectionUserDefinedCost2(secid, 99);
 		AKISetSectionUserDefinedCost3(secid, 99);
-
-
-		if (secid == 392783) {
-			printDebugLog("Section 392783's base ice fuel is: " + to_string(network.map_links_[secid].base_energy_ice_));
-		}
 	}
-
 	return 0;
 }
 
@@ -448,36 +444,32 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 
 	//double fac, sim_step = 0.5, eng_intval = 100;
 	double sim_step = AKIGetSimulationStepTime();
-	double E_i, E_e, E_p1, E_p2, E_f, E_cost[5];
 	//double P_gas = 4.5, P_elt = 0.12;		// price of gas and electricity
 
 	// update the total energy consumption for different types of vehicles
 	if (time - timTrans > 0) {
-		int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
-		for (int i = 0; i < secnb; i++) {
-			int secid = AKIInfNetGetSectionANGId(i);
-			if (secid > 0) {
-				A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
-				double grade = secinf.slopePercentages[0] / 100;
-				int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-				for (int k = 0; k < nbveh; k++) {
-					InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-					int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
-					double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
-					Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
-					if (type_id == 393772) { // ICE
-						eng_sum[0] += E_i * sim_step;
-					}
-					if (type_id == 393773) { // EV
-						eng_sum[1] += E_e * sim_step;
-					}
-					if (type_id == 393895) { // HFCV
-						eng_sum[2] += E_e * sim_step;
-					}
-					if (type_id == 392699) { // Regular ICE with minimum of Travel Time
-						eng_sum[3] += E_i * sim_step;
-					}
-				}
+		for (auto item : network.map_links_) {
+			int secid = item.first;
+			A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
+			double grade = secinf.slopePercentages[0] / 100.0;
+			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+			for (int k = 0; k < nbveh; k++) {
+				InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
+				VehicleType vehicle_type = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
+				double spd = vehinf.CurrentSpeed / 3.6;												// speed in m/s
+				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
+				double energy1; // fuel usage
+				double energy2; // electricity usage
+				Emission(spd, grade, acc, vehicle_type, energy1, energy2);
+				energy1 *= sim_step; // now will be in the unit of Gallon
+				energy2 *= sim_step / 3600.0; // now will be in the unit of kWh
+
+				network.overall_fuel_consumed_ += energy1;
+				network.fuel_consumed_per_vehicle_type_[vehicle_type] += energy1;
+				network.overall_electricity_used_ += energy2;
+				network.electricity_used_per_vehicle_type_[vehicle_type] += energy2;
+				network.overall_travel_time_ += sim_step;
+				network.travel_time_per_vehicle_type_[vehicle_type] += sim_step;
 			}
 		}
 	}
@@ -712,7 +704,11 @@ int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 int AAPIFinish()
 {
 	//AKIPrintString("\tFinish");
-	AKIPrintString(("Energy: ICE: " + to_string(eng_sum[0]) + ", EV = " + to_string(eng_sum[1]) + ", HFCV = " + to_string(eng_sum[2]) + ", Regular = " + to_string(eng_sum[3])).c_str());
+	//AKIPrintString(("Energy: ICE: " + to_string(eng_sum[0]) + ", EV = " + to_string(eng_sum[1]) + ", HFCV = " + to_string(eng_sum[2]) + ", Regular = " + to_string(eng_sum[3])).c_str());
+
+	printDebugLog("Network overall fuel usage is : " + to_string(network.overall_fuel_consumed_) + " Gallon.");
+	printDebugLog("Network overall electricity usage is : " + to_string(network.overall_electricity_used_) + " kWh.");
+	printDebugLog("Network overall travel time is : " + to_string(network.overall_travel_time_) + " seconds.");
 
 
 	return 0;
