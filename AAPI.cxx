@@ -170,21 +170,22 @@ void* link_attribute_hfcv;
 int N_link, N_turn, N_type, N_step;
 ifstream flink, fturn;
 double** lnk_flow, ** trn_per;
+static double _null_energy_varibale = 0;
 
 
 void printDebugLog(string s) {
 	AKIPrintString(("## Debug log ##: " + s).c_str());
 }
 
-
-void Emission(double spd, double grade, double acc, double& E_ice, double& E_pev, double& E_phev1, double& E_phev2, double& E_hfcv)
+// calculate energy based on vehicle type, energy2 is only for PHEV and is default to a dummy variable
+void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& energy1, double& energy2 = _null_energy_varibale)
 {
 	//double spd = 100.0 / 3.6; // in the unit of m/s
 	//double acc = 0;           // in the unit of m/s^2
 	//double grade = 0;         // without percentage
+
 	double spd_in_km_per_h;
 	double spd_in_m_per_s;
-
 	spd_in_m_per_s = spd;
 	spd_in_km_per_h = spd * 3.6;
 
@@ -201,137 +202,160 @@ void Emission(double spd, double grade, double acc, double& E_ice, double& E_pev
 	double Pa = 2.5, Pb = 5, P_aux = 1.0, P_idle = 0.5; // for FHCV, in the unit of kW
 
 	double grade_sin, grade_cos;
-	double energy[5]; // ICE, PEV, HPEV1, HPEV2, HFCV
 	double resistance;
 	double P_ice, P_w, P_batt, P_fuel;
-
-	// VT-CPFM model for gasoline vehicles
-	// 2010 Honda Accord, from rakha2011virginia paper
-	m = 1453, cd = 0.30, Af = 2.32, eta_d = 0.92;
-	a0 = 0.00059217, a1 = 0.000042709, a2 = 0.000001;
-	resistance = rho_air / 25.92 * cd * ch * Af * pow(spd_in_km_per_h, 2) + g * m * cr / 1000 * (c1 * spd_in_km_per_h + c2) + g * m * grade;
-	P_ice = ((resistance + 1.04 * m * acc) / (3600 * eta_d)) * spd_in_km_per_h; // in the unit of kW
-	energy[0] = a0;                                                             // in the unit of liter per second
-	if (P_ice > 0)
-		energy[0] = a0 + a1 * P_ice + a2 * pow(P_ice, 2);	// in the unit of liter per second
-	energy[0] /= 3.78541;												// now, energy[0] is in the unit of gallon per second
-	//cout << "ICE P_ice is :" << P_ice << " kW" << endl;
-	//cout << "ICE Fule of ice is: " << energy[0] << " gallon/s" << endl;
-
-	// CPEM model for EVs
-	// 2015 Nissan Leaf, from fiori2016power paper
-	m = 1521.0, Af = 2.3316, cd = 0.28;
-	grade_cos = sqrt(1.0 / (1.0 + pow(grade, 2)));
-	grade_sin = sqrt(1.0 - pow(grade_cos, 2));
-	if (grade < 0)
-		grade_sin *= -1;
-	P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
-	P_w = P_w / 1000.0;			// now P_W is in the unit of kW
-	if (P_w >= 0)
-	{
-		energy[1] = P_w / (eta_dl * eta_em); // in the unit of kW
-	}
-	else
-	{
-		if (acc < 0)
-			eta_rb = 1.0 / exp(0.0411 / abs(acc));
-		else
-			eta_rb = 0;
-		energy[1] = P_w * eta_rb; // in the unit of kW
-	}
-	//cout << "PEV P_w is: " << P_w << " kW" << endl;
-	//cout << "PEV electric motor power is: " << energy[1] << " kW" << endl;
-
-	// PHEV energy model
-	// 2013 Chevrolet Volt, from fiori2018microscopic paper
-	// this will assume the battery state-of-charge is always greater than the minimum range
-	// first calculate battery power
-	double temp_total_power = 0;
-	m = 1860, Af = 2.1851, cd = 0.29;
-	a0 = 0.00035218, a1 = 0.000032141, a2 = 0.000001;
-	grade_cos = sqrt(1 / (1 + pow(grade, 2)));
-	grade_sin = sqrt(1 - pow(grade_cos, 2));
-	if (grade < 0)
-		grade_sin *= -1;
-	P_w = (m * acc + m * g * grade_cos * cr / 1000 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
-	P_w = P_w / 1000;				// now P_W is in the unit of kW
-	if (P_w >= 0)
-	{
-		temp_total_power = P_w / (eta_dl * eta_em); // in the unit of kW
-	}
-	else
-	{
-		if (acc < 0)
-			eta_rb = 1 / exp(0.0411 / abs(acc));
-		else
-			eta_rb = 0;
-		temp_total_power = P_w * eta_rb; // in the unit of kW
-	}
 	double P_max = 111; // max electric motor power, in the unit of kW
-	if (temp_total_power > P_max)
-	{
-		P_ice = (temp_total_power - P_max);               // in the unit of kW
-		energy[2] = P_max;                                // electric usage for PHEV, in the unit of KW per second
-		energy[3] = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
-		energy[3] /= 3.78541;                             // now, energy[3] is in the unit of gallon per second
-	}
-	else
-	{
-		energy[2] = temp_total_power; // electric usage for PHEV, in the unit of KW per second
-		energy[3] = 0;                // fuel usage for PHEV, in the unit of gallon per second
-	}
-	//cout << "PHEV P_w is: " << P_w << " kW" << endl;
-	//cout << "PHEV total needed power is: " << temp_total_power << " kW" << endl;
-	//cout << "PHEV needed battery power is: " << energy[2] << " kW" << endl;
-	//cout << "PHEV needed fuel of ICE engine is: " << energy[3] << " gallon/s" << endl;
+	double temp_total_power;
 
-	// HFCV energy model
-	// 2017 Toyota Mirai, from ahn2022developing paper
-	m = 1928.0, Af = 2.3316, cd = 0.28;
-	grade_cos = sqrt(1.0 / (1.0 + pow(grade, 2)));
-	grade_sin = sqrt(1.0 - pow(grade_cos, 2));
-	if (grade < 0)
-		grade_sin *= -1;
-	// P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
-	P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
-	P_w = P_w / 1000; // now P_W is in the unit of kW
-	if (P_w <= Pa)
+	switch (vehicle_type)
 	{
-		P_batt = P_w + P_aux;
-		P_fuel = P_idle;
-	}
-	else
-	{
-		if (P_w > Pa && P_w <= Pb)
+	case VehicleType::ICE:
+	case VehicleType::ICE_NONCAV:
+		// VT-CPFM model for gasoline vehicles
+		// 2010 Honda Accord, from rakha2011virginia paper
+		m = 1453, cd = 0.30, Af = 2.32, eta_d = 0.92;
+		a0 = 0.00059217, a1 = 0.000042709, a2 = 0.000001;
+		resistance = rho_air / 25.92 * cd * ch * Af * pow(spd_in_km_per_h, 2) + g * m * cr / 1000 * (c1 * spd_in_km_per_h + c2) + g * m * grade;
+		P_ice = ((resistance + 1.04 * m * acc) / (3600 * eta_d)) * spd_in_km_per_h; // in the unit of kW
+		energy1 = a0;                                                             // in the unit of liter per second
+		if (P_ice > 0)
+			energy1 = a0 + a1 * P_ice + a2 * pow(P_ice, 2);	// in the unit of liter per second
+		energy1 /= 3.78541;												// now, energy1 is in the unit of gallon per second
+		//cout << "ICE P_ice is :" << P_ice << " kW" << endl;
+		//cout << "ICE Fule of ice is: " << energy1 << " gallon/s" << endl;
+		break;
+
+	case VehicleType::BEV:
+	case VehicleType::BEV_NONCAV:
+		// CPEM model for EVs
+		// 2015 Nissan Leaf, from fiori2016power paper
+		m = 1521.0, Af = 2.3316, cd = 0.28;
+		grade_cos = sqrt(1.0 / (1.0 + pow(grade, 2)));
+		grade_sin = sqrt(1.0 - pow(grade_cos, 2));
+		if (grade < 0)
+			grade_sin *= -1;
+		P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		P_w = P_w / 1000.0;			// now P_W is in the unit of kW
+		if (P_w >= 0)
 		{
-			if (spd_in_km_per_h <= va)
+			energy1 = P_w / (eta_dl * eta_em); // in the unit of kW
+		}
+		else
+		{
+			if (acc < 0)
+				eta_rb = 1.0 / exp(0.0411 / abs(acc));
+			else
+				eta_rb = 0;
+			energy1 = P_w * eta_rb; // in the unit of kW
+		}
+		//cout << "PEV P_w is: " << P_w << " kW" << endl;
+		//cout << "PEV electric motor power is: " << energy1 << " kW" << endl;
+		break;
+
+	case VehicleType::PHEV:
+	case VehicleType::PHEV_NONCAV:
+		// PHEV energy model
+		// 2013 Chevrolet Volt, from fiori2018microscopic paper
+		// this will assume the battery state-of-charge is always greater than the minimum range
+		// first calculate battery power
+		m = 1860, Af = 2.1851, cd = 0.29;
+		a0 = 0.00035218, a1 = 0.000032141, a2 = 0.000001;
+		P_max = 111;		// max electric motor power, in the unit of kW, need to check the value
+		grade_cos = sqrt(1 / (1 + pow(grade, 2)));
+		grade_sin = sqrt(1 - pow(grade_cos, 2));
+		if (grade < 0)
+			grade_sin *= -1;
+		P_w = (m * acc + m * g * grade_cos * cr / 1000 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		P_w = P_w / 1000;				// now P_W is in the unit of kW
+		if (P_w >= 0)
+		{
+			temp_total_power = P_w / (eta_dl * eta_em); // in the unit of kW
+		}
+		else
+		{
+			if (acc < 0)
+				eta_rb = 1 / exp(0.0411 / abs(acc));
+			else
+				eta_rb = 0;
+			temp_total_power = P_w * eta_rb; // in the unit of kW
+		}
+		if (temp_total_power > P_max)
+		{
+			P_ice = (temp_total_power - P_max);               // in the unit of kW
+			energy1 = P_max;                                // electric usage for PHEV, in the unit of KW per second
+			energy2 = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
+			energy2 /= 3.78541;                             // now, energy2 is in the unit of gallon per second
+		}
+		else
+		{
+			energy1 = temp_total_power; // electric usage for PHEV, in the unit of KW per second
+			energy2 = 0;                // fuel usage for PHEV, in the unit of gallon per second
+		}
+		//cout << "PHEV P_w is: " << P_w << " kW" << endl;
+		//cout << "PHEV total needed power is: " << temp_total_power << " kW" << endl;
+		//cout << "PHEV needed battery power is: " << energy1 << " kW" << endl;
+		//cout << "PHEV needed fuel of ICE engine is: " << energy2 << " gallon/s" << endl;
+		break;
+
+	case VehicleType::HFCV:
+	case VehicleType::HFCV_NONCAV:
+		// HFCV energy model
+		// 2017 Toyota Mirai, from ahn2022developing paper
+		m = 1928.0, Af = 2.3316, cd = 0.28;
+		grade_cos = sqrt(1.0 / (1.0 + pow(grade, 2)));
+		grade_sin = sqrt(1.0 - pow(grade_cos, 2));
+		if (grade < 0)
+			grade_sin *= -1;
+		// P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
+		P_w = P_w / 1000; // now P_W is in the unit of kW
+		if (P_w <= Pa)
+		{
+			P_batt = P_w + P_aux;
+			P_fuel = P_idle;
+		}
+		else
+		{
+			if (P_w > Pa && P_w <= Pb)
 			{
-				P_batt = P_w + P_aux;
-				P_fuel = P_idle;
+				if (spd_in_km_per_h <= va)
+				{
+					P_batt = P_w + P_aux;
+					P_fuel = P_idle;
+				}
+				else
+				{
+					P_batt = P_idle + P_aux;
+					P_fuel = P_w * beta;
+				}
 			}
 			else
 			{
-				P_batt = P_idle + P_aux;
+				P_batt = P_w * alpha + P_aux;
 				P_fuel = P_w * beta;
 			}
 		}
-		else
-		{
-			P_batt = P_w * alpha + P_aux;
-			P_fuel = P_w * beta;
-		}
-	}
-	energy[4] = P_batt + P_fuel;    // in the unit of kW
-	//cout << "HFCV P_w is: " << P_w << " kW" << endl;
-	//cout << "HFCV need battery power: " << P_batt << " kW" << endl;
-	//cout << "HFCV fuel cell power is : " << P_fuel << " kW" << endl;
-	//cout << "HFCV total power is : " << energy[4] << " kW" << endl;
+		energy1 = P_batt + P_fuel;    // in the unit of kW
+		//cout << "HFCV P_w is: " << P_w << " kW" << endl;
+		//cout << "HFCV need battery power: " << P_batt << " kW" << endl;
+		//cout << "HFCV fuel cell power is : " << P_fuel << " kW" << endl;
+		//cout << "HFCV total power is : " << energy1 << " kW" << endl;
+		break;
 
-	E_ice = energy[0];
-	E_pev = energy[1];
-	E_phev1 = energy[2];
-	E_phev2 = energy[3];
-	E_hfcv = energy[4];
+	default:
+		energy1 = 0;
+		energy2 = 0;
+		break;
+	}
+}
+
+// this function will return energy cost for all vehicle type
+void Emission(double spd, double grade, double acc, double& E_ice, double& E_bev, double& E_phev1, double& E_phev2, double& E_hfcv)
+{
+	Emission(spd, grade, acc, VehicleType::ICE, E_ice);
+	Emission(spd, grade, acc, VehicleType::BEV, E_bev);
+	Emission(spd, grade, acc, VehicleType::PHEV, E_phev1, E_phev2);
+	Emission(spd, grade, acc, VehicleType::HFCV, E_hfcv);
 }
 
 int AAPILoad()
@@ -409,7 +433,7 @@ int AAPIInit()
 
 
 		if (secid == 392783) {
-			printDebugLog("Section 392783's base ice fuel is: " +  to_string(network.map_links_[secid].base_energy_ice_));
+			printDebugLog("Section 392783's base ice fuel is: " + to_string(network.map_links_[secid].base_energy_ice_));
 		}
 	}
 
@@ -428,35 +452,35 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 	//double P_gas = 4.5, P_elt = 0.12;		// price of gas and electricity
 
 	// update the total energy consumption for different types of vehicles
-	//if (time - timTrans > 0) {
-	//	int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
-	//	for (int i = 0; i < secnb; i++) {
-	//		int secid = AKIInfNetGetSectionANGId(i);
-	//		if (secid > 0) {
-	//			A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
-	//			double grade = secinf.slopePercentages[0] / 100;
-	//			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-	//			for (int k = 0; k < nbveh; k++) {
-	//				InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-	//				int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
-	//				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
-	//				Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
-	//				if (type_id == 393772) { // ICE
-	//					eng_sum[0] += E_i * sim_step;
-	//				}
-	//				if (type_id == 393773) { // EV
-	//					eng_sum[1] += E_e * sim_step;
-	//				}
-	//				if (type_id == 393895) { // HFCV
-	//					eng_sum[2] += E_e * sim_step;
-	//				}
-	//				if (type_id == 392699) { // Regular ICE with minimum of Travel Time
-	//					eng_sum[3] += E_i * sim_step;
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
+	if (time - timTrans > 0) {
+		int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
+		for (int i = 0; i < secnb; i++) {
+			int secid = AKIInfNetGetSectionANGId(i);
+			if (secid > 0) {
+				A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
+				double grade = secinf.slopePercentages[0] / 100;
+				int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+				for (int k = 0; k < nbveh; k++) {
+					InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
+					int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
+					double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
+					Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
+					if (type_id == 393772) { // ICE
+						eng_sum[0] += E_i * sim_step;
+					}
+					if (type_id == 393773) { // EV
+						eng_sum[1] += E_e * sim_step;
+					}
+					if (type_id == 393895) { // HFCV
+						eng_sum[2] += E_e * sim_step;
+					}
+					if (type_id == 392699) { // Regular ICE with minimum of Travel Time
+						eng_sum[3] += E_i * sim_step;
+					}
+				}
+			}
+		}
+	}
 
 	//// update the link cost with the energy consumption at the interval of eng_interval
 	//if (int(simtime * 10) % int(eng_intval * 10) == 0) {
