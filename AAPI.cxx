@@ -10,11 +10,13 @@
 #include <string>
 #include <deque>
 #include <queue>
-#include <time.h>
+#include <ctime>
 #include <set>
 #include <random>
 #include <cmath>
 #include <fstream>
+#include <sstream>
+#include <iomanip>
 // Procedures could be modified by the user
 
 using namespace std;
@@ -28,6 +30,8 @@ unordered_map<int, int> from_turn;
 unordered_map<int, int> to_turn;
 unordered_map<int, double> turn_pert;
 
+void printDebugLog(string s);
+
 enum class VehicleType {
 	UNKNOWN = 0,
 	ICE = 393772,
@@ -39,6 +43,8 @@ enum class VehicleType {
 	PHEV_NONCAV = 393943,
 	HFCV_NONCAV = 393944
 };
+
+vector<int> valid_vehicle_type_list{393772, 393773, 393774, 393895, 393941, 393942, 393943, 393944};
 
 class Vehicle {
 public:
@@ -98,14 +104,14 @@ public:
 	double base_travel_time_;
 	double base_energy_ice_;
 	double base_energy_bev_;
-	double base_energy_phev1_;
-	double base_energy_phev2_;
+	double base_energy_phev1_; // for the gas usage
+	double base_energy_phev2_; // for the electricity usage
 	double base_energy_hfcv_;
 	vector<double> predicted_travel_time_;
 	vector<double> predicted_energy_ice_;
 	vector<double> predicted_energy_bev_;
-	vector<double> predicted_energy_phev1_;
-	vector<double> predicted_energy_phev2_;
+	vector<double> predicted_energy_phev1_; // for the gas usage
+	vector<double> predicted_energy_phev2_; // for the electricity usage
 	vector<double> predicted_energy_hfcv_;
 	double prediction_interval_;	// in seconds, default is 300s.
 	int number_of_predictions_;		// default is 13 from simulation time 00:00:00 to time 01:00:00
@@ -127,8 +133,55 @@ public:
 		electricity_used_per_vehicle_type_.clear();
 
 		price_gas_ = 3.5;		// define gas price here
-		price_electricity_ = 0.12; // define electric price here
+		price_electricity_ = 0.25; // define electric price here
 	}
+
+	void save_logs() {
+		void* attribute_demand = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::demand_percentage"));
+		void* attribute_prediction = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::prediction_horizon"));
+		void* attribute_cav_penetration = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
+		int experiment_id = ANGConnGetExperimentId();
+		double demand_percentage = ANGConnGetAttributeValueDouble(attribute_demand, experiment_id);
+		double prediction_horizon = ANGConnGetAttributeValueDouble(attribute_prediction, experiment_id);
+		double cav_penetration = ANGConnGetAttributeValueDouble(attribute_cav_penetration, experiment_id);
+
+		auto t = time(nullptr);
+		auto tm = *localtime(&t);
+		stringstream ss;
+		ss << fixed << setprecision(0) << "DTExp_Demand_" << demand_percentage << "_Prediction_" << prediction_horizon << "_CAV_" << cav_penetration << "_";
+		ss << std::put_time(&tm, "%Y%m%d%H%M%S") << ".log.csv";
+		string log_file_name = PROJECT_DIR + "\\logs\\" + ss.str();
+		printDebugLog(log_file_name);
+
+		ofstream fout;
+		fout.open(log_file_name);
+		fout << "Demand_Percentage, " << demand_percentage << "\n"
+			<< "Prediction_Horizon, " << prediction_horizon << "\n"
+			<< "CAV_Penetration, " << cav_penetration << "\n"
+			<< "Overall_Travel_Time, " << overall_travel_time_ << "\n"
+			<< "Overall_Fuel_Used, " << overall_fuel_consumed_ << "\n"
+			<< "Overall_Electricity_Used, " << overall_electricity_used_ << "\n";
+		fout << "Vehicle_Type, ICE, BEV, PHEV, HFCV, ICE_NONCAV, BEV_NONCAV, PHEV_NONCAN, HFCV_NONCAV\n";
+
+		fout << "Travel_Time_VT";
+		for (auto vt : valid_vehicle_type_list) {
+			fout << ", " << travel_time_per_vehicle_type_[static_cast<VehicleType>(vt)];
+		}
+		fout << endl;
+		fout << "Fuel_Used_VT";
+		for (auto vt : valid_vehicle_type_list) {
+			fout << ", " << fuel_consumed_per_vehicle_type_[static_cast<VehicleType>(vt)];
+		}
+		fout << endl;
+		fout << "Electricity_Used_VT";
+		for (auto vt : valid_vehicle_type_list) {
+			fout << ", " << electricity_used_per_vehicle_type_[static_cast<VehicleType>(vt)];
+		}
+		fout << endl;
+
+		fout.close();
+	}
+
 	unordered_map<int, Vehicle> map_vehicles_;
 	unordered_map<int, Link> map_links_;
 	double overall_travel_time_;
@@ -271,19 +324,19 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		if (temp_total_power > P_max)
 		{
 			P_ice = (temp_total_power - P_max);               // in the unit of kW
-			energy1 = P_max;                                // electric usage for PHEV, in the unit of KW per second
-			energy2 = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
-			energy2 /= 3.78541;                             // now, energy2 is in the unit of gallon per second
+			energy2 = P_max;                                // electric usage for PHEV, in the unit of KW per second
+			energy1 = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
+			energy1 /= 3.78541;                             // now, energy1 is in the unit of gallon per second
 		}
 		else
 		{
-			energy1 = temp_total_power; // electric usage for PHEV, in the unit of KW per second
-			energy2 = 0;                // fuel usage for PHEV, in the unit of gallon per second
+			energy2 = temp_total_power; // electric usage for PHEV, in the unit of KW per second
+			energy1 = 0;                // fuel usage for PHEV, in the unit of gallon per second
 		}
 		//cout << "PHEV P_w is: " << P_w << " kW" << endl;
 		//cout << "PHEV total needed power is: " << temp_total_power << " kW" << endl;
-		//cout << "PHEV needed battery power is: " << energy1 << " kW" << endl;
-		//cout << "PHEV needed fuel of ICE engine is: " << energy2 << " gallon/s" << endl;
+		//cout << "PHEV needed battery power is: " << energy2 << " kW" << endl;
+		//cout << "PHEV needed fuel of ICE engine is: " << energy1 << " gallon/s" << endl;
 		break;
 
 	case VehicleType::HFCV:
@@ -328,7 +381,7 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		//cout << "HFCV P_w is: " << P_w << " kW" << endl;
 		//cout << "HFCV need battery power: " << P_batt << " kW" << endl;
 		//cout << "HFCV fuel cell power is : " << P_fuel << " kW" << endl;
-		//cout << "HFCV total power is : " << energy1 << " kW" << endl;
+		//cout << "HFCV total power is : " << energy2 << " kW" << endl;
 		break;
 
 	default:
@@ -336,7 +389,7 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 	}
 }
 
-// this function will return energy cost for all vehicle type
+// this function will return energy cost for all vehicle type, E_phev1 if for gas usage, E_phev2 is for electricity usage
 void Emission(double spd, double grade, double acc, double& E_ice, double& E_bev, double& E_phev1, double& E_phev2, double& E_hfcv)
 {
 	double dummy_energy_variable;
@@ -405,14 +458,14 @@ int AAPIInit()
 
 		network.map_links_[secid].base_energy_ice_ *= _free_flow_travel_time_in_s;
 		network.map_links_[secid].base_energy_bev_ *= _free_flow_travel_time_in_h;
-		network.map_links_[secid].base_energy_phev1_ *= _free_flow_travel_time_in_h;
-		network.map_links_[secid].base_energy_phev2_ *= _free_flow_travel_time_in_s;
+		network.map_links_[secid].base_energy_phev1_ *= _free_flow_travel_time_in_s;
+		network.map_links_[secid].base_energy_phev2_ *= _free_flow_travel_time_in_h;
 		network.map_links_[secid].base_energy_hfcv_ *= _free_flow_travel_time_in_h;
 
 
 		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_energy_ice_ * network.price_gas_);
 		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_energy_bev_ * network.price_electricity_);
-		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_electricity_ + network.map_links_[secid].base_energy_phev2_ * network.price_gas_);
+		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_gas_ + network.map_links_[secid].base_energy_phev2_ * network.price_electricity_);
 		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_energy_hfcv_ * network.price_electricity_);
 		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, secinf.length / spd);
 	}
@@ -693,6 +746,14 @@ int AAPIFinish()
 	printDebugLog("Network overall electricity usage is : " + to_string(network.overall_electricity_used_) + " kWh.");
 	printDebugLog("Network overall travel time is : " + to_string(network.overall_travel_time_) + " seconds.");
 
+	if (AKIGetCurrentSimulationTime() < AKIGetEndSimTime()) {
+		printDebugLog("Simulation is not finished, no output files.");
+		return 0;
+	}
+	else {
+		printDebugLog("Statistic will be output to the logs directory");
+		network.save_logs();
+	}
 
 	return 0;
 }
