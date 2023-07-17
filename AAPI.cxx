@@ -19,28 +19,14 @@
 
 using namespace std;
 
-double simtime = 0; //current simulation time, in second
+string PROJECT_DIR = "D:\\program\\Aimsun\\digital_twin_aimsun";
+
 unordered_map<int, int> optimal_lane_set; //secid-laneid
 unordered_map<int, double> link_flw;
 unordered_map<int, int> link_list;
 unordered_map<int, int> from_turn;
 unordered_map<int, int> to_turn;
 unordered_map<int, double> turn_pert;
-
-// base energy consumptions for each link
-unordered_map<int, double> ice_base_energy_per_link;
-unordered_map<int, double> bev_base_energy_per_link;
-unordered_map<int, double> phev_base1_energy_per_link;
-unordered_map<int, double> phev_base2_energy_per_link;
-unordered_map<int, double> hfcv_base_energy_per_link;
-
-// energy consumptions for each vehicle
-unordered_map<int, double> ice_energy_per_vehicle;
-unordered_map<int, double> bev_energy_per_vehicle;
-unordered_map<int, double> phev_energy1_per_vehicle;
-unordered_map<int, double> phev_energy2_per_vehicle;
-unordered_map<int, double> hfcv_energy_per_vehicle;
-
 
 enum class VehicleType {
 	UNKNOWN = 0,
@@ -165,7 +151,7 @@ double eng_sum[4];
 void* link_attribute_travel_time;
 void* link_attribute_ice;
 void* link_attribute_bev;
-void* link__attribute_phev;
+void* link_attribute_phev;
 void* link_attribute_hfcv;
 
 int N_link, N_turn, N_type, N_step;
@@ -383,9 +369,9 @@ int AAPIInit()
 	if (link_attribute_bev == NULL) {
 		link_attribute_bev = ANGConnCreateAttribute(AKIConvertFromAsciiString("GKSection"), AKIConvertFromAsciiString("GKSection::bev"), AKIConvertFromAsciiString("bev"), DOUBLE_TYPE, EXTERNAL);
 	}
-	link__attribute_phev = ANGConnGetAttribute(AKIConvertFromAsciiString("GKSection::phev"));
-	if (link__attribute_phev == NULL) {
-		link__attribute_phev = ANGConnCreateAttribute(AKIConvertFromAsciiString("GKSection"), AKIConvertFromAsciiString("GKSection::phev"), AKIConvertFromAsciiString("phev"), DOUBLE_TYPE, EXTERNAL);
+	link_attribute_phev = ANGConnGetAttribute(AKIConvertFromAsciiString("GKSection::phev"));
+	if (link_attribute_phev == NULL) {
+		link_attribute_phev = ANGConnCreateAttribute(AKIConvertFromAsciiString("GKSection"), AKIConvertFromAsciiString("GKSection::phev"), AKIConvertFromAsciiString("phev"), DOUBLE_TYPE, EXTERNAL);
 	}
 	link_attribute_hfcv = ANGConnGetAttribute(AKIConvertFromAsciiString("GKSection::hfcv"));
 	if (link_attribute_hfcv == NULL) {
@@ -426,12 +412,9 @@ int AAPIInit()
 
 		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_energy_ice_ * network.price_gas_);
 		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_energy_bev_ * network.price_electricity_);
-		ANGConnSetAttributeValueDouble(link__attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_electricity_ + network.map_links_[secid].base_energy_phev2_ * network.price_gas_);
+		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_electricity_ + network.map_links_[secid].base_energy_phev2_ * network.price_gas_);
 		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_energy_hfcv_ * network.price_electricity_);
 		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, secinf.length / spd);
-		AKISetSectionUserDefinedCost(secid, 99);
-		AKISetSectionUserDefinedCost2(secid, 99);
-		AKISetSectionUserDefinedCost3(secid, 99);
 	}
 	return 0;
 }
