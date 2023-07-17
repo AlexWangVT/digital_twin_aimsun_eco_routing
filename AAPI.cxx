@@ -416,7 +416,9 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		grade_sin = sqrt(1.0 - pow(grade_cos, 2));
 		if (grade < 0)
 			grade_sin *= -1;
-		P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		// P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		// To be consistant on the wheel power model, use the model in HFCV model
+		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000.0;			// now P_W is in the unit of kW
 		if (P_w >= 0)
 		{
@@ -447,7 +449,9 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		grade_sin = sqrt(1 - pow(grade_cos, 2));
 		if (grade < 0)
 			grade_sin *= -1;
-		P_w = (m * acc + m * g * grade_cos * cr / 1000 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		// P_w = (m * acc + m * g * grade_cos * cr / 1000 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		// To be consistant on the wheel power model, use the model in HFCV model
+		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000;				// now P_W is in the unit of kW
 		if (P_w >= 0)
 		{
@@ -489,35 +493,46 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		if (grade < 0)
 			grade_sin *= -1;
 		// P_w = (m * acc + m * g * grade_cos * cr / 1000.0 * (c1 * spd_in_m_per_s + c2) + 0.5 * rho_air * Af * cd * pow(spd_in_m_per_s, 2) + m * g * grade_sin) * spd_in_m_per_s; // P_w is in the unit of Watt, could be negative
+		// To be consistant on the wheel power model, use the model in HFCV model
 		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000; // now P_W is in the unit of kW
-		if (P_w <= Pa)
-		{
-			P_batt = P_w + P_aux;
-			P_fuel = P_idle;
-		}
-		else
-		{
-			if (P_w > Pa && P_w <= Pb)
+		if (P_w >= 0) {
+			if (P_w <= Pa)
 			{
-				if (spd_in_km_per_h <= va)
-				{
-					P_batt = P_w + P_aux;
-					P_fuel = P_idle;
-				}
-				else
-				{
-					P_batt = P_idle + P_aux;
-					P_fuel = P_w * beta;
-				}
+				P_batt = P_w + P_aux;
+				P_fuel = P_idle;
 			}
 			else
 			{
-				P_batt = P_w * alpha + P_aux;
-				P_fuel = P_w * beta;
+				if (P_w > Pa && P_w <= Pb)
+				{
+					if (spd_in_km_per_h <= va)
+					{
+						P_batt = P_w + P_aux;
+						P_fuel = P_idle;
+					}
+					else
+					{
+						P_batt = P_idle + P_aux;
+						P_fuel = P_w * beta;
+					}
+				}
+				else
+				{
+					P_batt = P_w * alpha + P_aux;
+					P_fuel = P_w * beta;
+				}
 			}
+			energy2 = P_batt + P_fuel;    // in the unit of kW
 		}
-		energy2 = P_batt + P_fuel;    // in the unit of kW
+		else
+		{
+			if (acc < 0)
+				eta_rb = 1.0 / exp(0.0411 / abs(acc));
+			else
+				eta_rb = 0;
+			energy2 = P_w * eta_rb; // in the unit of kW
+		}
 		//cout << "HFCV P_w is: " << P_w << " kW" << endl;
 		//cout << "HFCV need battery power: " << P_batt << " kW" << endl;
 		//cout << "HFCV fuel cell power is : " << P_fuel << " kW" << endl;
