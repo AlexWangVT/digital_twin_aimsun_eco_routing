@@ -120,27 +120,29 @@ public:
 	}
 
 	void addOneVehicleData(VehicleType vt, double energy1, double energy2, double travel_time) {
+		double travel_time_in_s = travel_time;
+		double travel_time_in_h = travel_time / 3600.0;
 		switch (vt)
 		{
 		case VehicleType::ICE:
 		case VehicleType::ICE_NONCAV:
-			energy_ice_ += energy1;
+			energy_ice_ += energy1 * travel_time_in_s;
 			cnt_ice_++;
 			break;
 		case VehicleType::BEV:
 		case VehicleType::BEV_NONCAV:
-			energy_bev_ += energy2;
+			energy_bev_ += energy2 * travel_time_in_h;
 			cnt_bev_++;
 			break;
 		case VehicleType::PHEV:
 		case VehicleType::PHEV_NONCAV:
-			energy_phev1_ += energy1;
-			energy_phev2_ += energy2;
+			energy_phev1_ += energy1 * travel_time_in_s;
+			energy_phev2_ += energy2 * travel_time_in_h;
 			cnt_phev_++;
 			break;
 		case VehicleType::HFCV:
 		case VehicleType::HFCV_NONCAV:
-			energy_hfcv_ += energy2;
+			energy_hfcv_ += energy2 * travel_time_in_h;
 			cnt_phev_++;
 			break;
 		default:
@@ -632,7 +634,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 {
 	double sim_step = AKIGetSimulationStepTime();
 
-	// update the total energy consumption for different types of vehicles
+	// update the total energy consumption for different types of vehicles in every simlulation step
 	if (time - timTrans > 0) {
 		for (auto& item : network.map_links_) {
 			int secid = item.first;
@@ -660,12 +662,12 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		}
 	}
 
+	// only used to record historical data, recorded data will be write to file if simulation ends successfully
 	// record link cost for every link every 5 minutes
 	static double next_record_time = 0; // seconds
 	double record_interval = 300; // seconds
 	double sim_time = time - timTrans;
-
-	if (sim_time >= next_record_time) {
+	if (sim_time >= next_record_time - sim_step) {
 		next_record_time += record_interval;
 		for (auto& item : network.map_links_) {
 			int secid = item.first;
@@ -682,226 +684,12 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				double energy1; // fuel usage
 				double energy2; // electricity usage
 				Emission(spd, grade, acc, vehicle_type, energy1, energy2);
-
 				double section_travel_time = secinf.length / max(spd, 2.0);
 				current_link.addOneVehicleData(vehicle_type, energy1, energy2, section_travel_time);
 			}
 			current_link.updatePredictedData();
 		}
 	}
-
-	//// update the link cost with the energy consumption at the interval of eng_interval
-	//if (int(simtime * 10) % int(eng_intval * 10) == 0) {
-	//	int secnb = AKIInfNetNbSectionsANG();			// obtain the number of links in the network
-	//	for (int i = 0; i < secnb; i++) {
-	//		int secid = AKIInfNetGetSectionANGId(i);
-	//		if (secid > 0) {
-	//			A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
-	//			double grade = secinf.slopePercentages[0] / 100;
-	//			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-	//			for (int k = 0; k < nbveh; k++) {
-	//				InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-	//				StaticInfVeh vehstat = AKIVehGetVehicleStaticInfSection(secid, k);
-	//				int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
-
-
-	//				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
-	//				Emission(vehinf.CurrentSpeed / 3.6, grade, acc, E_i, E_e, E_p1, E_p2, E_f);
-	//				double fac;
-	//				if (vehinf.CurrentSpeed > 0) {
-	//					fac = secinf.length / (vehinf.CurrentSpeed / 3.6);
-	//				}
-	//				else {
-	//					fac = secinf.length / (5.0 / 3.6);
-	//				}
-	//				E_cost[0] += E_i * fac;
-	//				E_cost[1] += E_e * fac;
-	//				E_cost[2] += E_p1 * fac;
-	//				E_cost[3] += E_p2 * fac;
-	//				E_cost[4] += E_f * fac;
-
-	//				if (ice_energy_per_vehicle[vehinf.idVeh] == 0) {
-	//					//veh_tt[vehinf.idVeh] = sim_step;
-	//					ice_energy_per_vehicle[vehinf.idVeh] = E_i * sim_step;
-	//					bev_energy_per_vehicle[vehinf.idVeh] = E_e * sim_step;
-	//					phev_energy1_per_vehicle[vehinf.idVeh] = E_p1 * sim_step;
-	//					phev_energy2_per_vehicle[vehinf.idVeh] = E_p2 * sim_step;
-	//					hfcv_energy_per_vehicle[vehinf.idVeh] = E_f * sim_step;
-	//				}
-	//				else {
-	//					//veh_tt[vehinf.idVeh] += sim_step;
-	//					ice_energy_per_vehicle[vehinf.idVeh] += E_i * sim_step;
-	//					bev_energy_per_vehicle[vehinf.idVeh] += E_e * sim_step;
-	//					phev_energy1_per_vehicle[vehinf.idVeh] += E_p1 * sim_step;
-	//					phev_energy2_per_vehicle[vehinf.idVeh] += E_p2 * sim_step;
-	//					hfcv_energy_per_vehicle[vehinf.idVeh] += E_f * sim_step;
-	//				}
-
-	//				//vtyp_eng[vehinf.idVeh] = vehinf.type;
-	//			}
-
-	//			if (nbveh == 0) {
-	//				E_cost[0] = ice_base_energy_per_link[secid];
-	//				E_cost[1] = bev_base_energy_per_link[secid];
-	//				E_cost[2] = phev_base1_energy_per_link[secid];
-	//				E_cost[3] = phev_base2_energy_per_link[secid];
-	//				E_cost[4] = hfcv_base_energy_per_link[secid];
-	//			}
-	//			else {
-	//				E_cost[0] = E_cost[0] / nbveh;
-	//				E_cost[1] = E_cost[1] / nbveh;
-	//				E_cost[2] = E_cost[2] / nbveh;
-	//				E_cost[3] = E_cost[3] / nbveh;
-	//				E_cost[4] = E_cost[4] / nbveh;
-	//			}
-
-	//			AKISetSectionUserDefinedCost(secid, E_cost[0] * P_gas / 3.8);		// Fuel consumption
-	//			AKISetSectionUserDefinedCost2(secid, E_cost[1] * P_elt / 3600);	// EV Energy
-	//			//AKISetSectionUserDefinedCost3(secid, E_cost[2] * P_elt / 3600 + E_cost[3] * P_gas / 3.8);	// PHEV Energy in $, 0.25/kWh, $6/gallon
-	//			AKISetSectionUserDefinedCost3(secid, E_cost[4] * P_elt / 3600);	// HFCV Energy
-
-	//			ANGConnSetAttributeValueInt(link_attribute_ice, secid, E_cost[0] * P_gas / 3.8);
-	//			ANGConnSetAttributeValueInt(link_attribute_bev, secid, E_cost[1] * P_elt / 3600);
-	//			ANGConnSetAttributeValueInt(link__attribute_phev, secid, E_cost[2] * P_elt / 3600 + E_cost[3] * P_gas / 3.8);
-	//			ANGConnSetAttributeValueInt(link_attribute_hfcv, secid, E_cost[4] * P_elt / 3600);
-	//			ANGConnSetAttributeValueInt(link_attribute_travel_time, secid, 999999);
-
-	//		}
-	//	}
-	//}
-
-
-
-	///*
-	//// update traffic state at a specific time interval (5 min) with real-world traffic
-	//if (int(simtime * 10) % 3000 == 0) {
-
-	//	// update the real-world conditions: read link flow and turn percentages in the past N_steps (5 minute interval)
-	//	int lnk0, lnk1, lnk2;
-	//	double flw, pert;
-	//	N_hist = int(N_step / 2);
-	//	flink.open("Link_update.txt");
-	//	for (int j = 0; j < N_lnk; j++)
-	//		for (int i = 0; i < N_hist; i++) {
-	//			flink >> lnk_flow[i][j];
-	//		}
-	//	flink.close();
-
-	//	N_turn = 0;
-	//	fturn.open("Turn_update.txt");
-	//	for (int j = 0; j < N_turn; j++)
-	//		for (int i = 0; i < N_hist; i++) {
-	//			fturn >> trn_per[i][j];
-	//		}
-	//	fturn.close();
-
-	//	// predict the road traffic conditions
-	//	// current use moving average (will be replaced with the trained machine learning models)
-	//	double tmpf, tmpp;
-	//	for (int j = 0; j < N_lnk; j++) {
-	//		for (int t = N_hist; t < N_step; t++) {
-	//			tmpf = 0;
-	//			for (int k = 1; k <= 5; k++) {
-	//				tmpf += lnk_flow[t - k][j];
-	//			}
-	//			lnk_flow[t][j] = tmpf / 5;
-	//		}
-	//	}
-	//	for (int j = 0; j < N_turn; j++) {
-	//		for (int t = N_hist; t < N_step; t++) {
-	//			tmpp = 0;
-	//			for (int k = 1; k <= 5; k++) {
-	//				tmpf += trn_per[t - k][j];
-	//			}
-	//			trn_per[t][j] = tmpp / 5;
-	//		}
-	//	}
-
-
-	//	// update the link and turn information
-	//	for (int t = N_hist; t < N_step; t++) {
-	//		for (int i = 0; i < N_lnk; i++) {
-	//			AKIStateDemandSetDemandSection(link_list[i], 1, t+1, lnk_flow[t][i]);
-	//		}
-	//		for (int i = 0; i < N_turn; i++) {
-	//			AKIStateDemandSetTurningPercentage(from_turn[i], to_turn[i], 1, t+1, trn_per[t][i]);
-	//		}
-	//	}
-	//}
-	//*/
-
-	//// update link-level traffic conditions at every 1 minutes, applied for dynamic routing with minimum travel time
-	//// can be updated wtih energy consumption by changing the cost to vehicle energy usage
-	//double link_tt, link_spd;
-	//if (int(simtime * 10) % int(eng_intval * 10) == 0) {
-	//	int secnb = AKIInfNetNbSectionsANG();
-	//	for (int i = 0; i < secnb; i++) {
-	//		int secid = AKIInfNetGetSectionANGId(i);
-	//		A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
-	//		if (secid > 0) {
-	//			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-	//			if (nbveh > 0) {
-	//				link_spd = 0;
-	//				for (int k = 0; k < nbveh; k++) {
-	//					InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-	//					link_spd += vehinf.CurrentSpeed / 3.6;						// currently use all vehicles, can change it to CV only
-	//				}
-	//				link_spd = link_spd / nbveh;
-	//				if (link_spd == 0) link_spd = 0.5;
-	//				link_tt = secinf.length / link_spd;
-	//			}
-	//			else {
-	//				link_tt = secinf.length / (secinf.speedLimit / 3.6);
-	//			}
-	//			//AKISetSectionUserDefinedCost(secid, link_tt);
-	//			if (simtime > 800 && simtime < 2600 && secid == 39674) link_tt = link_tt * 1000;
-	//			ANGConnSetAttributeValueInt(link_attribute_travel_time, secid, link_tt);
-	//		}
-	//	}
-	//}
-
-	//// update routes for sample vehicles (from one OD pair with incidents) with the predictive cost
-	//if (int(simtime * 10) % 300 == 0) { // updated at every 30 seconds
-	//	int secnb = AKIInfNetNbSectionsANG();
-	//	for (int i = 0; i < secnb; i++) {
-	//		int secid = AKIInfNetGetSectionANGId(i);
-	//		A2KSectionInf secinf = AKIInfNetGetSectionANGInf(secid);
-	//		if (secid > 0) {
-	//			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-	//			if (nbveh > 0) {
-	//				for (int k = 0; k < nbveh; k++) {
-	//					InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-	//					StaticInfVeh vehstat = AKIVehGetVehicleStaticInfSection(secid, k);
-	//					int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
-	//					if (type_id == 393904) {
-	//						int nbPath = AKIInfNetGetShortestPathNbSections(vehinf.idSection, 15519, link_attribute_travel_time);
-	//						if (nbPath > 1) {
-	//							int* path = new int[nbPath];
-	//							AKIVehSetAsTracked(vehinf.idVeh);
-	//							int result = AKIInfNetGetShortestPath(vehinf.idSection, 15519, link_attribute_travel_time, path);
-	//							int* pathArray = (int*)calloc(nbPath - 1, sizeof(int));
-	//							for (int j = 0; j < nbPath - 1; j++) {
-	//								pathArray[j] = path[j + 1];
-	//							}
-	//							int err = AKIVehTrackedModifyNextSections(vehinf.idVeh, nbPath - 1, pathArray);
-	//							delete[] path;
-	//							free(pathArray);
-	//						}
-	//					}
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
-
-
-
-	/*
-	// rewind the simulation at every one hour, i.e., only predict traffic in one hour
-	if (simtime == 3600) {
-		ANGSetSimulationOrder(2, 0);
-	}
-	*/
 
 	return 0;
 }
@@ -914,9 +702,6 @@ int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 
 int AAPIFinish()
 {
-	//AKIPrintString("\tFinish");
-	//AKIPrintString(("Energy: ICE: " + to_string(eng_sum[0]) + ", EV = " + to_string(eng_sum[1]) + ", HFCV = " + to_string(eng_sum[2]) + ", Regular = " + to_string(eng_sum[3])).c_str());
-
 	printDebugLog("Network overall fuel usage is : " + to_string(network.overall_fuel_consumed_) + " Gallon.");
 	printDebugLog("Network overall electricity usage is : " + to_string(network.overall_electricity_used_) + " kWh.");
 	printDebugLog("Network overall travel time is : " + to_string(network.overall_travel_time_) + " seconds.");
@@ -925,12 +710,10 @@ int AAPIFinish()
 		printDebugLog("Simulation is not finished, no output files.");
 		return 0;
 	}
-	else {
-		printDebugLog("Statistic will be output to the logs directory");
-		network.saveLogs();
-	}
 
-	network.saveHistoryData();
+	printDebugLog("Statistic will be output to the logs directory");
+	network.saveLogs();			// save simulation statistics in the \logs dir
+	network.saveHistoryData();	// save historical data to the file
 
 	return 0;
 }
