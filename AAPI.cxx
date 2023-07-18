@@ -24,8 +24,11 @@ using namespace std;
 
 string PROJECT_DIR = "D:\\program\\Aimsun\\digital_twin_aimsun";
 const bool GENERATE_HISTORICAL_DATA = false;
+const double HISTORICAL_DATA_INTERVAL = 60.0; // seconds
 const double PRICE_GAS = 3.5;
 const double PRICE_ELECTRICITY = 0.25;
+const double SOC_MIN = 0.204; // for PHEV
+const double SOC_MAX = 0.88; // for PHEV
 
 void printDebugLog(string s);
 
@@ -57,17 +60,34 @@ public:
 	Vehicle(int id, VehicleType vehicle_type = VehicleType::UNKNOWN) {
 		id_ = id;
 		vehicle_type_ = vehicle_type;
+		soc_ = SOC_MAX;
+		battery_capacity_ = 16.5;	// for 2013 Chevrolet Volt, in the unit of kWh
 		trave_time_accumulated_ = 0;
-		energy_consumed_accumulated_ = 0;
-		energy_consumed2_accumulated_ = 0;
+		energy1_consumed_accumulated_ = 0;
+		energy2_consumed_accumulated_ = 0;
 	}
 	Vehicle() : Vehicle(-1) {}
+
+	void updateEnergy(double energy1, double energy2, double sim_step) {
+		// energy1 will be in the unit of gallon
+		// energy2 will be in the unit of kWh
+		energy1_consumed_accumulated_ += energy1;
+		energy2_consumed_accumulated_ += energy2;
+		trave_time_accumulated_ += sim_step;
+		if (vehicle_type_ == VEHICLE_TYPE_PHEV || vehicle_type_ == VEHICLE_TYPE_PHEV_NONCAV) {
+			if (!(energy2 < 0 && soc_ > SOC_MAX)) { // no more charging when soc is greater than SOC_MAX
+				soc_ -= energy2 / battery_capacity_;
+			}
+		}
+	}
 
 	int id_;
 	VehicleType vehicle_type_;
 	double trave_time_accumulated_;
-	double energy_consumed_accumulated_;
-	double energy_consumed2_accumulated_; // only used for PHEV to store fuel usage
+	double energy1_consumed_accumulated_;
+	double energy2_consumed_accumulated_;	// only used for PHEV to store fuel usage
+	double soc_;
+	double battery_capacity_;
 };
 
 class Link {
@@ -76,8 +96,6 @@ public:
 		id_ = id;
 		resetEnergy();
 		resetBaseEnergy();
-
-		prediction_interval_ = 300; // in seconds
 		resetPredictedEnergy();
 	}
 
@@ -207,7 +225,6 @@ public:
 	vector<double> predicted_energy_phev1_; // for the gas usage
 	vector<double> predicted_energy_phev2_; // for the electricity usage
 	vector<double> predicted_energy_hfcv_;
-	double prediction_interval_;	// in seconds, default is 300s.
 	int cnt_time_, cnt_ice_, cnt_bev_, cnt_phev_, cnt_hfcv_;
 };
 
@@ -220,7 +237,6 @@ public:
 		overall_fuel_consumed_ = 0;
 		overall_electricity_used_ = 0;
 		N_links_ = 0;
-		N_vehicles_ = 0;
 		N_vehicle_types_ = 8;
 		travel_time_per_vehicle_type_.clear();
 		fuel_consumed_per_vehicle_type_.clear();
@@ -230,7 +246,7 @@ public:
 		price_electricity_ = PRICE_ELECTRICITY; // define electric price here
 
 		history_file_replative_path_ = "data_history\\history.txt";
-		summary_log_relative_path_ = "logs\\summary.csv";
+		summary_log_relative_path_ = "sim_logs\\summary.csv";
 
 		experiment_id_ = -1;
 		demand_percentage_ = 100;
@@ -248,7 +264,7 @@ public:
 		ss1 << fixed << setprecision(0) << "DTExp_Demand_" << demand_percentage_ << "_Prediction_" << prediction_horizon_ << "_CAV_" << cav_penetration_ << "_";
 		ss2 << std::put_time(&tm, "%Y%m%d%H%M%S");
 		string time_now = ss2.str();
-		string log_file_name = PROJECT_DIR + "\\logs\\" + ss1.str() + time_now + ".log.csv";
+		string log_file_name = PROJECT_DIR + "\\sim_logs\\" + ss1.str() + time_now + ".log.csv";
 		printDebugLog(log_file_name);
 
 		// write to a seperate file
@@ -257,6 +273,7 @@ public:
 		fout << "Demand_Percentage," << demand_percentage_ << ",%\n"
 			<< "Prediction_Horizon," << prediction_horizon_ << ",min\n"
 			<< "CAV_Penetration," << cav_penetration_ << ",%\n"
+			<< "Eco_Routing_with_Travel_Time" << eco_routing_with_travel_time_ << "\n"
 			<< "Overall_Travel_Time," << overall_travel_time_ << ",s\n"
 			<< "Overall_Fuel_Used," << overall_fuel_consumed_ << ",gallon\n"
 			<< "Overall_Electricity_Used," << overall_electricity_used_ << ",kWh\n"
@@ -277,9 +294,10 @@ public:
 
 		// write to a summary file
 		fout.open(PROJECT_DIR + "\\" + summary_log_relative_path_, ios::out | ios::app);
-		fout << time_now << "," << demand_percentage_ << "," << prediction_horizon_ << "," << cav_penetration_
-			<< "," << overall_travel_time_ << "," << overall_fuel_consumed_ << "," << overall_electricity_used_
-			<< "," << overall_fuel_consumed_ * price_gas_ << "," << overall_electricity_used_ * price_electricity_;
+		fout << time_now << "," << demand_percentage_ << "," << prediction_horizon_ << "," << cav_penetration_ 
+			<< "," << eco_routing_with_travel_time_ << "," << overall_travel_time_ << "," << overall_fuel_consumed_
+			<< "," << overall_electricity_used_ << "," << overall_fuel_consumed_ * price_gas_ << ","
+			<< overall_electricity_used_ * price_electricity_;
 		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt];
 		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt];
 		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt];
@@ -315,7 +333,7 @@ public:
 		}
 	}
 
-	void loadHistoricalData(){
+	void loadHistoricalData() {
 
 		for (auto& item : map_links_) {
 			item.second.resetPredictedEnergy();
@@ -328,7 +346,7 @@ public:
 		printDebugLog("Will read historical data from this file: " + history_file_name);
 		ifstream fin;
 		fin.open(history_file_name);
-		
+
 		if (!fin.is_open())
 			return;
 
@@ -367,6 +385,27 @@ public:
 		fin.close();
 	}
 
+	int getTotalNumberVehicles() {
+		return map_vehicles_.size();
+	}
+
+	double getMaxTravelTime() {
+		double the_max = 0;
+		for (auto& item : map_vehicles_) {
+			if (item.second.trave_time_accumulated_ > the_max)
+				the_max = item.second.trave_time_accumulated_;
+		}
+		return the_max;
+	}
+
+	double getAverageTravelTime() {
+		double avg = 0;
+		for (auto& item : map_vehicles_) {
+			avg += item.second.trave_time_accumulated_;
+		}
+		return avg / getTotalNumberVehicles();
+	}
+
 	unordered_map<int, Vehicle> map_vehicles_;
 	unordered_map<int, Link> map_links_;
 	double overall_travel_time_;
@@ -376,7 +415,6 @@ public:
 	unordered_map<VehicleType, double> fuel_consumed_per_vehicle_type_;
 	unordered_map<VehicleType, double> electricity_used_per_vehicle_type_;
 	int N_links_;
-	int N_vehicles_;
 	int N_vehicle_types_;	// only count self-defined vehicle type
 	double price_gas_;		// US dollar per gallon
 	double price_electricity_;	// US dollar per kWh
@@ -411,11 +449,12 @@ void printDebugLog(string s) {
 }
 
 // calculate energy based on vehicle type, energy1 is for gas usage and energy2 is for electricity usage
-void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& energy1, double& energy2)
+void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& energy1, double& energy2, double cur_soc = 0.88)
 {
 	//double spd = 100.0 / 3.6; // in the unit of m/s
 	//double acc = 0;           // in the unit of m/s^2
 	//double grade = 0;         // without percentage
+	//double cur_soc;			// current soc of the vehicle
 	energy1 = 0;
 	energy2 = 0;
 
@@ -430,11 +469,13 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 	double altitude = 125;                                                   // default 125m for DC
 	double ch = 1 - 0.085 * (altitude / 1000);                               // default correction factor for altitude (unitless)
 	double eta_dl = 0.92, eta_em = 0.91, eta_rb = 0;                         // driveline efficiency and electric motor efficiency (fixed most of the time)
+	double eta_battery = 0.9;												 // for PHEV
+	double soc_min = SOC_MIN, soc_max = SOC_MAX;							 // range for PHEV
 
 	double alpha = 0.2;                                 // for FHCV, efficiency of energy produced from the battery
 	double beta = 0.93;                                 // for FHCV, overall vehicle efficiency considering a driveline efficiency and the electric motor efficiency
 	double va = 32;                                     // for FHCV, in the unit of km/h
-	double Pa = 2.5, Pb = 5, P_aux = 1.0, P_idle = 0.5; // for FHCV, in the unit of kW
+	double Pa = 2.5, Pb = 5, P_aux = 0.0, P_idle = 0.0; // for FHCV, in the unit of kW
 
 	double grade_sin, grade_cos;
 	double resistance;
@@ -506,30 +547,41 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// To be consistant on the wheel power model, use the model in HFCV model
 		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000;				// now P_W is in the unit of kW
+
 		if (P_w >= 0)
 		{
 			temp_total_power = P_w / (eta_dl * eta_em); // in the unit of kW
+			if (cur_soc > soc_min) {
+				if (temp_total_power > P_max)
+				{
+					P_ice = (temp_total_power - P_max);               // in the unit of kW
+					energy2 = P_max;                                // electric usage for PHEV, in the unit of kW
+					energy1 = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
+					energy1 /= 3.78541;                             // now, energy1 is in the unit of gallon per second
+				}
+				else
+				{
+					energy2 = temp_total_power; // electric usage for PHEV, in the unit of kW
+					energy1 = 0;                // fuel usage for PHEV, in the unit of gallon per second
+				}
+			}
+			else {
+				P_ice = temp_total_power;
+				energy2 = 0;                                // electric usage for PHEV, in the unit of kW
+				energy1 = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
+				energy1 /= 3.78541;                             // now, energy1 is in the unit of gallon per second
+			}
 		}
 		else
 		{
 			if (acc < 0)
-				eta_rb = 1 / exp(0.0411 / abs(acc));
+				eta_rb = 1.0 / exp(0.0411 / abs(acc));
 			else
 				eta_rb = 0;
-			temp_total_power = P_w * eta_rb; // in the unit of kW
+			energy2 = P_w * eta_rb * eta_battery; // in the unit of kW, will be charged back to the battery
+			energy1 = 0;
 		}
-		if (temp_total_power > P_max)
-		{
-			P_ice = (temp_total_power - P_max);               // in the unit of kW
-			energy2 = P_max;                                // electric usage for PHEV, in the unit of KW per second
-			energy1 = a0 + a1 * P_ice + a2 * pow(P_ice, 2); // fuel usage for PHEV, in the unit of liter per second
-			energy1 /= 3.78541;                             // now, energy1 is in the unit of gallon per second
-		}
-		else
-		{
-			energy2 = temp_total_power; // electric usage for PHEV, in the unit of KW per second
-			energy1 = 0;                // fuel usage for PHEV, in the unit of gallon per second
-		}
+
 		//cout << "PHEV P_w is: " << P_w << " kW" << endl;
 		//cout << "PHEV total needed power is: " << temp_total_power << " kW" << endl;
 		//cout << "PHEV needed battery power is: " << energy2 << " kW" << endl;
@@ -598,6 +650,7 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 }
 
 // this function will return energy cost for all vehicle type, E_phev1 if for gas usage, E_phev2 is for electricity usage
+// only used to calculate base energy cost
 void Emission(double spd, double grade, double acc, double& E_ice, double& E_bev, double& E_phev1, double& E_phev2, double& E_hfcv)
 {
 	double dummy_energy_variable;
@@ -708,11 +761,17 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				VehicleType vehicle_type = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
 				double spd = vehinf.CurrentSpeed / 3.6;												// speed in m/s
 				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
+
+				if (network.map_vehicles_.count(vehinf.idVeh) < 1)
+					network.map_vehicles_[vehinf.idVeh] = Vehicle(vehinf.idVeh, vehicle_type);
+				Vehicle& cur_vehicle = network.map_vehicles_[vehinf.idVeh];
+
 				double energy1; // fuel usage
 				double energy2; // electricity usage
-				Emission(spd, grade, acc, vehicle_type, energy1, energy2);
+				Emission(spd, grade, acc, vehicle_type, energy1, energy2, cur_vehicle.soc_);
 				energy1 *= sim_step; // now will be in the unit of Gallon
 				energy2 *= sim_step / 3600.0; // now will be in the unit of kWh
+				cur_vehicle.updateEnergy(energy1, energy2, sim_step);
 
 				network.overall_fuel_consumed_ += energy1;
 				network.fuel_consumed_per_vehicle_type_[vehicle_type] += energy1;
@@ -728,7 +787,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		// only used to record historical data, recorded data will be write to file if simulation ends successfully
 		// record cost for every link every 5 minutes
 		static double next_record_time = 0; // seconds
-		double record_interval = 300; // seconds
+		double record_interval = HISTORICAL_DATA_INTERVAL; // seconds
 		double sim_time = time - timTrans;
 		if (sim_time >= next_record_time - sim_step) {
 			next_record_time += record_interval;
@@ -765,9 +824,13 @@ int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 
 int AAPIFinish()
 {
+	printDebugLog("Demand_Percentage is " + to_string(network.demand_percentage_) + "% , Prediction_Horizon is " + to_string(network.prediction_horizon_) + " min.");
+	printDebugLog("CAV_Penetration is " + to_string(network.cav_penetration_) + "% , Eco_Routing_with_Travel_Time is " + to_string(network.eco_routing_with_travel_time_) + " .");
 	printDebugLog("Network overall fuel usage is : " + to_string(network.overall_fuel_consumed_) + " Gallon.");
 	printDebugLog("Network overall electricity usage is : " + to_string(network.overall_electricity_used_) + " kWh.");
 	printDebugLog("Network overall travel time is : " + to_string(network.overall_travel_time_) + " seconds.");
+	printDebugLog("Total simulated vehicles: " + to_string(network.getTotalNumberVehicles()));
+	printDebugLog("Average travel time is : " + to_string(network.getAverageTravelTime()) + " seconds. Maimum of travel time is " + to_string(network.getMaxTravelTime()) + " seconds.");
 
 	if (AKIGetCurrentSimulationTime() < AKIGetEndSimTime()) {
 		printDebugLog("Simulation is not finished, no output files.");
@@ -796,7 +859,7 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 	if (time < timTrans) // do not update cost in the warm up period
 		return 0;
 
-	int predict_cost_idx = (int)round((time - timTrans + predition_horizon_in_s) / 300.0);
+	int predict_cost_idx = (int)round((time - timTrans + predition_horizon_in_s) / HISTORICAL_DATA_INTERVAL);
 	if (!GENERATE_HISTORICAL_DATA) {
 		// update link cost based on the predicted data
 		for (auto& item : network.map_links_) {

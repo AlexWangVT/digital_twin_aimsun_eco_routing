@@ -8,6 +8,9 @@
 CppProperties.json
 
 
+## ignore some log Files
+**/DTExp*.csv
+
 
 
 
