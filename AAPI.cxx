@@ -15,6 +15,7 @@
 #include <random>
 #include <cmath>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <iomanip>
 // Procedures could be modified by the user
@@ -43,16 +44,17 @@ enum class VehicleType {
 	PHEV_NONCAV = 393943,
 	HFCV_NONCAV = 393944
 };
-VehicleType VEHICLE_TYPE_ICE = VehicleType::ICE;
-VehicleType VEHICLE_TYPE_BEV = VehicleType::BEV;
-VehicleType VEHICLE_TYPE_PHEV = VehicleType::PHEV;
-VehicleType VEHICLE_TYPE_HFCV = VehicleType::HFCV;
-VehicleType VEHICLE_TYPE_ICE_NONCAV = VehicleType::ICE_NONCAV;
-VehicleType VEHICLE_TYPE_BEV_NONCAV = VehicleType::BEV_NONCAV;
-VehicleType VEHICLE_TYPE_PHEV_NONCAV = VehicleType::PHEV_NONCAV;
-VehicleType VEHICLE_TYPE_HFCV_NONCAV = VehicleType::HFCV_NONCAV;
+const VehicleType VEHICLE_TYPE_ICE = VehicleType::ICE;
+const VehicleType VEHICLE_TYPE_BEV = VehicleType::BEV;
+const VehicleType VEHICLE_TYPE_PHEV = VehicleType::PHEV;
+const VehicleType VEHICLE_TYPE_HFCV = VehicleType::HFCV;
+const VehicleType VEHICLE_TYPE_ICE_NONCAV = VehicleType::ICE_NONCAV;
+const VehicleType VEHICLE_TYPE_BEV_NONCAV = VehicleType::BEV_NONCAV;
+const VehicleType VEHICLE_TYPE_PHEV_NONCAV = VehicleType::PHEV_NONCAV;
+const VehicleType VEHICLE_TYPE_HFCV_NONCAV = VehicleType::HFCV_NONCAV;
 
-vector<int> valid_vehicle_type_list{393772, 393773, 393774, 393895, 393941, 393942, 393943, 393944};
+const vector<VehicleType> valid_vehicle_type_list{VEHICLE_TYPE_ICE, VEHICLE_TYPE_BEV, VEHICLE_TYPE_PHEV, VEHICLE_TYPE_HFCV,
+VEHICLE_TYPE_ICE_NONCAV, VEHICLE_TYPE_BEV_NONCAV, VEHICLE_TYPE_PHEV_NONCAV, VEHICLE_TYPE_HFCV_NONCAV};
 
 class Vehicle {
 public:
@@ -237,31 +239,33 @@ public:
 		price_gas_ = 3.5;		// define gas price here
 		price_electricity_ = 0.25; // define electric price here
 
-		history_file_name_ = "data_history\\history.txt";
+		history_file_replative_path_ = "data_history\\history.txt";
+		summary_log_relative_path_ = "logs\\summary.csv";
+
+		experiment_id_ = -1;
+		demand_percentage_ = 100;
+		prediction_horizon_ = 5;
+		cav_penetration_ = 100;
 	}
 
 	void saveLogs() {
-		void* attribute_demand = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::demand_percentage"));
-		void* attribute_prediction = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::prediction_horizon"));
-		void* attribute_cav_penetration = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
-		int experiment_id = ANGConnGetExperimentId();
-		double demand_percentage = ANGConnGetAttributeValueDouble(attribute_demand, experiment_id);
-		double prediction_horizon = ANGConnGetAttributeValueDouble(attribute_prediction, experiment_id);
-		double cav_penetration = ANGConnGetAttributeValueDouble(attribute_cav_penetration, experiment_id);
 
 		auto t = time(nullptr);
 		auto tm = *localtime(&t);
-		stringstream ss;
-		ss << fixed << setprecision(0) << "DTExp_Demand_" << demand_percentage << "_Prediction_" << prediction_horizon << "_CAV_" << cav_penetration << "_";
-		ss << std::put_time(&tm, "%Y%m%d%H%M%S") << ".log.csv";
-		string log_file_name = PROJECT_DIR + "\\logs\\" + ss.str();
+		stringstream ss1;
+		stringstream ss2;
+		ss1 << fixed << setprecision(0) << "DTExp_Demand_" << demand_percentage_ << "_Prediction_" << prediction_horizon_ << "_CAV_" << cav_penetration_ << "_";
+		ss2 << std::put_time(&tm, "%Y%m%d%H%M%S");
+		string time_now = ss2.str();
+		string log_file_name = PROJECT_DIR + "\\logs\\" + ss1.str() + time_now + ".log.csv";
 		printDebugLog(log_file_name);
 
+		// write to a seperate file
 		ofstream fout;
 		fout.open(log_file_name);
-		fout << "Demand_Percentage, " << demand_percentage << ", %\n"
-			<< "Prediction_Horizon, " << prediction_horizon << ", min\n"
-			<< "CAV_Penetration, " << cav_penetration << ", %\n"
+		fout << "Demand_Percentage, " << demand_percentage_ << ", %\n"
+			<< "Prediction_Horizon, " << prediction_horizon_ << ", min\n"
+			<< "CAV_Penetration, " << cav_penetration_ << ", %\n"
 			<< "Overall_Travel_Time, " << overall_travel_time_ << ", s\n"
 			<< "Overall_Fuel_Used, " << overall_fuel_consumed_ << ", gallon\n"
 			<< "Overall_Electricity_Used, " << overall_electricity_used_ << ", kWh\n"
@@ -270,21 +274,25 @@ public:
 		fout << "Vehicle_Type, ICE, BEV, PHEV, HFCV, ICE_NONCAV, BEV_NONCAV, PHEV_NONCAN, HFCV_NONCAV\n";
 
 		fout << "Travel_Time_VT";
-		for (auto& vt : valid_vehicle_type_list) {
-			fout << ", " << travel_time_per_vehicle_type_[static_cast<VehicleType>(vt)];
-		}
+		for (auto& vt : valid_vehicle_type_list) fout << ", " << travel_time_per_vehicle_type_[vt];
 		fout << endl;
 		fout << "Fuel_Used_VT";
-		for (auto& vt : valid_vehicle_type_list) {
-			fout << ", " << fuel_consumed_per_vehicle_type_[static_cast<VehicleType>(vt)];
-		}
+		for (auto& vt : valid_vehicle_type_list) fout << ", " << fuel_consumed_per_vehicle_type_[vt];
 		fout << endl;
 		fout << "Electricity_Used_VT";
-		for (auto& vt : valid_vehicle_type_list) {
-			fout << ", " << electricity_used_per_vehicle_type_[static_cast<VehicleType>(vt)];
-		}
+		for (auto& vt : valid_vehicle_type_list) fout << ", " << electricity_used_per_vehicle_type_[vt];
 		fout << endl;
+		fout.close();
 
+		// write to a summary file
+		fout.open(PROJECT_DIR + "\\" + summary_log_relative_path_, ios::out | ios::app);
+		fout << time_now << ", " << demand_percentage_ << ", " << prediction_horizon_ << ", " << cav_penetration_
+			<< ", " << overall_travel_time_ << ", " << overall_fuel_consumed_ << ", " << overall_electricity_used_
+			<< ", " << overall_fuel_consumed_ * price_gas_ << ", " << overall_electricity_used_ * price_electricity_;
+		for (auto& vt : valid_vehicle_type_list) fout << ", " << travel_time_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << ", " << fuel_consumed_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << ", " << electricity_used_per_vehicle_type_[vt];
+		fout << endl;
 		fout.close();
 	}
 
@@ -297,7 +305,7 @@ public:
 		double prediction_horizon = ANGConnGetAttributeValueDouble(attribute_prediction, experiment_id);
 		double cav_penetration = ANGConnGetAttributeValueDouble(attribute_cav_penetration, experiment_id);
 
-		string history_file_name = PROJECT_DIR + "\\" + history_file_name_;
+		string history_file_name = PROJECT_DIR + "\\" + history_file_replative_path_;
 		printDebugLog("Will write history data to this file: " + history_file_name);
 
 		ofstream fout;
@@ -336,7 +344,13 @@ public:
 	int N_vehicle_types_;	// only count self-defined vehicle type
 	double price_gas_;		// US dollar per gallon
 	double price_electricity_;	// US dollar per kWh
-	string history_file_name_;
+	string history_file_replative_path_;
+	string summary_log_relative_path_;
+
+	int experiment_id_;
+	double demand_percentage_;
+	double prediction_horizon_;
+	double cav_penetration_;
 };
 
 Network network;
@@ -446,7 +460,7 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// first calculate battery power
 		m = 1860, Af = 2.1851, cd = 0.29;
 		a0 = 0.00035218, a1 = 0.000032141, a2 = 0.000001;
-		P_max = 111;		// max electric motor power, in the unit of kW, need to check the value
+		P_max = 111;		// max electric motor power, in the unit of kW
 		grade_cos = sqrt(1 / (1 + pow(grade, 2)));
 		grade_sin = sqrt(1 - pow(grade_cos, 2));
 		if (grade < 0)
@@ -565,8 +579,7 @@ int AAPILoad()
 
 int AAPIInit()
 {
-
-	printDebugLog("In AAPIInit()");
+	//printDebugLog("In AAPIInit()");
 	ANGConnEnableVehiclesInBatch(true);
 
 	// define new attributes for link travel time cost and fuel cost (fuel costs need to be transfered into money cost before updating into the attributes)
@@ -594,6 +607,15 @@ int AAPIInit()
 
 	// build the local link map in network
 	// and update the initial link energy consumption
+
+	void* attribute_demand = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::demand_percentage"));
+	void* attribute_prediction = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::prediction_horizon"));
+	void* attribute_cav_penetration = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
+	network.experiment_id_ = ANGConnGetExperimentId();
+	network.demand_percentage_ = ANGConnGetAttributeValueDouble(attribute_demand, network.experiment_id_);
+	network.prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network.experiment_id_);
+	network.cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network.experiment_id_);
+
 	network.N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
 	printDebugLog("Total number of links is : " + to_string(network.N_links_));
 	for (int i = 0; i < network.N_links_; i++) {
@@ -726,7 +748,10 @@ int AAPIUnLoad()
 
 int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 {
-	//AKIPrintString("\tPreRouteChoice Calculation");
+	// update link cost before rerouting
+
+
+
 	return 0;
 }
 
