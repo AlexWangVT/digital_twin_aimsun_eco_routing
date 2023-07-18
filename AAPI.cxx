@@ -23,9 +23,9 @@
 using namespace std;
 
 string PROJECT_DIR = "D:\\program\\Aimsun\\digital_twin_aimsun";
-const bool GENERATE_HISTORICAL_DATA = true;
-const bool PRICE_GAS = 3.5;
-const bool PRICE_ELECTRICITY = 0.25;
+const bool GENERATE_HISTORICAL_DATA = false;
+const double PRICE_GAS = 3.5;
+const double PRICE_ELECTRICITY = 0.25;
 
 void printDebugLog(string s);
 
@@ -236,6 +236,7 @@ public:
 		demand_percentage_ = 100;
 		prediction_horizon_ = 5;
 		cav_penetration_ = 100;
+		eco_routing_with_travel_time_ = false;
 	}
 
 	void saveLogs() {
@@ -386,6 +387,7 @@ public:
 	double demand_percentage_;
 	double prediction_horizon_;
 	double cav_penetration_;
+	bool eco_routing_with_travel_time_;
 };
 
 Network network;
@@ -645,10 +647,12 @@ int AAPIInit()
 	void* attribute_demand = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::demand_percentage"));
 	void* attribute_prediction = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::prediction_horizon"));
 	void* attribute_cav_penetration = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
+	void* attribute_eco_routing_with_travel_time = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::eco_routing_with_travel_time"));
 	network.experiment_id_ = ANGConnGetExperimentId();
 	network.demand_percentage_ = ANGConnGetAttributeValueDouble(attribute_demand, network.experiment_id_);
 	network.prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network.experiment_id_);
 	network.cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network.experiment_id_);
+	network.eco_routing_with_travel_time_ = ANGConnGetAttributeValueBool(attribute_eco_routing_with_travel_time, network.experiment_id_);
 	network.N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
 	printDebugLog("Total number of links is : " + to_string(network.N_links_));
 	for (int i = 0; i < network.N_links_; i++) {
@@ -789,8 +793,10 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 	// update link cost before rerouting
 	double predition_horizon_in_s = network.prediction_horizon_ * 60;
 	double timTrans = AKIGetDurationTransTime();
-	int predict_cost_idx = round((time - timTrans + predition_horizon_in_s) / 300.0);
+	if (time < timTrans) // do not update cost in the warm up period
+		return 0;
 
+	int predict_cost_idx = (int)round((time - timTrans + predition_horizon_in_s) / 300.0);
 	if (!GENERATE_HISTORICAL_DATA) {
 		// update link cost based on the predicted data
 		for (auto& item : network.map_links_) {
@@ -803,11 +809,19 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 			double _free_flow_travel_time_in_s = secinf.length / spd;
 			double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
 
-			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx] * network.price_gas_);
-			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_energy_bev_[predict_cost_idx] * network.price_electricity_);
-			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.predicted_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.predicted_energy_phev2_[predict_cost_idx] * network.price_electricity_);
-			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.predicted_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
 			ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+			if (!network.eco_routing_with_travel_time_) {
+				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx] * network.price_gas_);
+				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_energy_bev_[predict_cost_idx] * network.price_electricity_);
+				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.predicted_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.predicted_energy_phev2_[predict_cost_idx] * network.price_electricity_);
+				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.predicted_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
+			}
+			else {
+				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+			}
 		}
 	}
 	return 0;
