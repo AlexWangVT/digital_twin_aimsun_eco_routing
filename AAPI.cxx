@@ -52,8 +52,8 @@ const VehicleType VEHICLE_TYPE_BEV_NONCAV = VehicleType::BEV_NONCAV;
 const VehicleType VEHICLE_TYPE_PHEV_NONCAV = VehicleType::PHEV_NONCAV;
 const VehicleType VEHICLE_TYPE_HFCV_NONCAV = VehicleType::HFCV_NONCAV;
 
-const vector<VehicleType> valid_vehicle_type_list{VEHICLE_TYPE_ICE, VEHICLE_TYPE_BEV, VEHICLE_TYPE_PHEV, VEHICLE_TYPE_HFCV,
-VEHICLE_TYPE_ICE_NONCAV, VEHICLE_TYPE_BEV_NONCAV, VEHICLE_TYPE_PHEV_NONCAV, VEHICLE_TYPE_HFCV_NONCAV};
+const vector<VehicleType> valid_vehicle_type_list{VEHICLE_TYPE_ICE, VEHICLE_TYPE_ICE_NONCAV, VEHICLE_TYPE_BEV, VEHICLE_TYPE_BEV_NONCAV,
+VEHICLE_TYPE_PHEV, VEHICLE_TYPE_PHEV_NONCAV, VEHICLE_TYPE_HFCV, VEHICLE_TYPE_HFCV_NONCAV};
 
 class Vehicle {
 public:
@@ -237,10 +237,12 @@ public:
 		overall_fuel_consumed_ = 0;
 		overall_electricity_used_ = 0;
 		N_links_ = 0;
+		N_vehicles_ = 0;
 		N_vehicle_types_ = 8;
 		travel_time_per_vehicle_type_.clear();
 		fuel_consumed_per_vehicle_type_.clear();
 		electricity_used_per_vehicle_type_.clear();
+		vehicle_cnt_per_vehicle_type_.clear();
 
 		price_gas_ = PRICE_GAS;		// define gas price here
 		price_electricity_ = PRICE_ELECTRICITY; // define electric price here
@@ -267,6 +269,8 @@ public:
 		string log_file_name = PROJECT_DIR + "\\sim_logs\\" + ss1.str() + time_now + ".log.csv";
 		printDebugLog(log_file_name);
 
+		N_vehicles_ = map_vehicles_.size();
+
 		// write to a seperate file
 		ofstream fout;
 		fout.open(log_file_name);
@@ -274,33 +278,45 @@ public:
 			<< "Prediction_Horizon," << prediction_horizon_ << ",min\n"
 			<< "CAV_Penetration," << cav_penetration_ << ",%\n"
 			<< "Eco_Routing_with_Travel_Time" << eco_routing_with_travel_time_ << "\n"
-			<< "Overall_Travel_Time," << overall_travel_time_ << ",s\n"
-			<< "Overall_Fuel_Used," << overall_fuel_consumed_ << ",gallon\n"
-			<< "Overall_Electricity_Used," << overall_electricity_used_ << ",kWh\n"
-			<< "Overall_Fuel_Cost," << overall_fuel_consumed_ * price_gas_ << ",dollars\n"
-			<< "Overall_Electricity_Cost," << overall_electricity_used_ * price_electricity_ << ",dollars\n";
-		fout << "Vehicle_Type,ICE,BEV,PHEV,HFCV,ICE_NONCAV,BEV_NONCAV,PHEV_NONCAN,HFCV_NONCAV\n";
+			<< "Overall_Travel_Time_Avg," << overall_travel_time_ / N_vehicles_ << ",s\n"
+			<< "Overall_Fuel_Used_Avg," << overall_fuel_consumed_ / N_vehicles_ << ",gallon\n"
+			<< "Overall_Electricity_Used_Avg," << overall_electricity_used_ / N_vehicles_ << ",kWh\n"
+			<< "Overall_Fuel_Cost_Avg," << overall_fuel_consumed_ * price_gas_ / N_vehicles_ << ",dollars\n"
+			<< "Overall_Electricity_Cost_Avg," << overall_electricity_used_ * price_electricity_ / N_vehicles_ << ",dollars\n"
+			<< "Total_Number_of_Vehicles," << N_vehicles_ << "\n"
+			<< "Vehicle_Type,ICE,ICE_NONCAV,BEV,BEV_NONCAV,PHEV,PHEV_NONCAN,HFCV,HFCV_NONCAV\n";
 
-		fout << "Travel_Time_VT";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt];
+		fout << "Travel_Time_VT_Avg";
+		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
-		fout << "Fuel_Used_VT";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt];
+		fout << "Fuel_Used_VT_Avg";
+		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
-		fout << "Electricity_Used_VT";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt];
+		fout << "Electricity_Used_VT_Avg";
+		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		fout << endl;
+		fout << "Vehicle_Count_VT";
+		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout.close();
 
-		// write to a summary file
+		// write to the summary file
 		fout.open(PROJECT_DIR + "\\" + summary_log_relative_path_, ios::out | ios::app);
-		fout << time_now << "," << demand_percentage_ << "," << prediction_horizon_ << "," << cav_penetration_ 
-			<< "," << eco_routing_with_travel_time_ << "," << overall_travel_time_ << "," << overall_fuel_consumed_
-			<< "," << overall_electricity_used_ << "," << overall_fuel_consumed_ * price_gas_ << ","
-			<< overall_electricity_used_ * price_electricity_;
-		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt];
+		fout << time_now
+			<< "," << demand_percentage_
+			<< "," << prediction_horizon_
+			<< "," << cav_penetration_
+			<< "," << eco_routing_with_travel_time_
+			<< "," << overall_travel_time_ / N_vehicles_
+			<< "," << overall_fuel_consumed_ / N_vehicles_
+			<< "," << overall_electricity_used_ / N_vehicles_
+			<< "," << overall_fuel_consumed_ * price_gas_ / N_vehicles_
+			<< "," << overall_electricity_used_ * price_electricity_
+			<< "," << N_vehicles_;
+		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout.close();
 	}
@@ -414,7 +430,9 @@ public:
 	unordered_map<VehicleType, double> travel_time_per_vehicle_type_;
 	unordered_map<VehicleType, double> fuel_consumed_per_vehicle_type_;
 	unordered_map<VehicleType, double> electricity_used_per_vehicle_type_;
+	unordered_map<VehicleType, int> vehicle_cnt_per_vehicle_type_;
 	int N_links_;
+	int N_vehicles_;
 	int N_vehicle_types_;	// only count self-defined vehicle type
 	double price_gas_;		// US dollar per gallon
 	double price_electricity_;	// US dollar per kWh
@@ -735,7 +753,7 @@ int AAPIInit()
 		//ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_energy_bev_ * network.price_electricity_);
 		//ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_gas_ + network.map_links_[secid].base_energy_phev2_ * network.price_electricity_);
 		//ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_energy_hfcv_ * network.price_electricity_);
-		
+
 		// init cost will be the travel time of the link
 		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_travel_time_);
 		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_travel_time_);
@@ -768,8 +786,11 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				double spd = vehinf.CurrentSpeed / 3.6;												// speed in m/s
 				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
 
-				if (network.map_vehicles_.count(vehinf.idVeh) < 1)
+				if (network.map_vehicles_.count(vehinf.idVeh) < 1) {
 					network.map_vehicles_[vehinf.idVeh] = Vehicle(vehinf.idVeh, vehicle_type);
+					network.vehicle_cnt_per_vehicle_type_[vehicle_type]++;
+				}
+
 				Vehicle& cur_vehicle = network.map_vehicles_[vehinf.idVeh];
 
 				double energy1; // fuel usage
@@ -877,10 +898,10 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 			double grade = secinf.slopePercentages[0] / 100;
 			double _free_flow_travel_time_in_s = secinf.length / spd;
 			double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
-			
+
 			// this is the cost for non-cavs and will use base travel time
 			ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
-			
+
 			// these are the cost for all cavs
 			if (!network.eco_routing_with_travel_time_) {
 				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx] * network.price_gas_);
