@@ -723,19 +723,25 @@ int AAPIInit()
 
 		double _free_flow_travel_time_in_s = secinf.length / spd;
 		double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
+		// record base cost
 		network.map_links_[secid].base_travel_time_ = _free_flow_travel_time_in_s;
-
 		network.map_links_[secid].base_energy_ice_ *= _free_flow_travel_time_in_s;
 		network.map_links_[secid].base_energy_bev_ *= _free_flow_travel_time_in_h;
 		network.map_links_[secid].base_energy_phev1_ *= _free_flow_travel_time_in_s;
 		network.map_links_[secid].base_energy_phev2_ *= _free_flow_travel_time_in_h;
 		network.map_links_[secid].base_energy_hfcv_ *= _free_flow_travel_time_in_h;
 
-		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_energy_ice_ * network.price_gas_);
-		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_energy_bev_ * network.price_electricity_);
-		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_gas_ + network.map_links_[secid].base_energy_phev2_ * network.price_electricity_);
-		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_energy_hfcv_ * network.price_electricity_);
-		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, secinf.length / spd);
+		//ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_energy_ice_ * network.price_gas_);
+		//ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_energy_bev_ * network.price_electricity_);
+		//ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_gas_ + network.map_links_[secid].base_energy_phev2_ * network.price_electricity_);
+		//ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_energy_hfcv_ * network.price_electricity_);
+		
+		// init cost will be the travel time of the link
+		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, network.map_links_[secid].base_travel_time_);
 	}
 
 	if (!GENERATE_HISTORICAL_DATA)
@@ -871,8 +877,11 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 			double grade = secinf.slopePercentages[0] / 100;
 			double _free_flow_travel_time_in_s = secinf.length / spd;
 			double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
-
-			ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+			
+			// this is the cost for non-cavs and will use base travel time
+			ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
+			
+			// these are the cost for all cavs
 			if (!network.eco_routing_with_travel_time_) {
 				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx] * network.price_gas_);
 				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_energy_bev_[predict_cost_idx] * network.price_electricity_);
