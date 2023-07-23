@@ -30,7 +30,8 @@ const double PRICE_ELECTRICITY = 0.25;
 const double SOC_MIN = 0.204; // for PHEV
 const double SOC_MAX = 0.88; // for PHEV
 const double MOVING_AVERAGE_INTERVAL = 60.0; // seconds
-double SIM_STEP = 1.0; // seconds, must be updated in the init() function
+const double MOVING_AVERAGE_WINDOW = 20 * 60.0; // seconds
+double SIM_STEP = 1.0; // seconds, must be updated in the AAPIInit() function
 
 void printDebugLog(string s);
 
@@ -221,6 +222,37 @@ public:
 			recorded_energy_hfcv_.push_back(energy_ice_ / cnt_hfcv_);
 	}
 
+	vector<double> predictMovingAverage(int mv_window, int predict_interval) {
+		vector<double> predicted_values(6,0);
+
+		vector<double> record_travel_time(recorded_travel_time_.end() - mv_window, recorded_travel_time_.end());
+		predicted_values[0] = predictFuture(record_travel_time, mv_window + predict_interval - 1);
+		vector<double> record_energy_ice(recorded_energy_ice_.end() - mv_window, recorded_energy_ice_.end());
+		predicted_values[1] = predictFuture(record_energy_ice, mv_window + predict_interval - 1);
+		vector<double> record_energy_bev(recorded_energy_bev_.end() - mv_window, recorded_energy_bev_.end());
+		predicted_values[2] = predictFuture(record_energy_bev, mv_window + predict_interval - 1);
+		vector<double> record_energy_phev1(recorded_energy_phev1_.end() - mv_window, recorded_energy_phev1_.end());
+		predicted_values[3] = predictFuture(record_energy_phev1, mv_window + predict_interval - 1);
+		vector<double> record_energy_phev2(recorded_energy_phev2_.end() - mv_window, recorded_energy_phev2_.end());
+		predicted_values[4] = predictFuture(record_energy_phev2, mv_window + predict_interval - 1);
+		vector<double> record_energy_hfcv(recorded_energy_hfcv_.end() - mv_window, recorded_energy_hfcv_.end());
+		predicted_values[5] = predictFuture(record_energy_hfcv, mv_window + predict_interval - 1);
+
+		return predicted_values;
+	}
+
+	double predictFuture(vector<double> &record_vector, int future_idx) {
+		int n = record_vector.size();
+		while (record_vector.size() < future_idx + 1) {
+			double sum = 0;
+			for (int j = record_vector.size() - 1; record_vector.size() - j <= n; j--) {
+				sum += record_vector[j];
+			}
+			record_vector.push_back(sum / n);
+		}
+		return record_vector[future_idx];
+	}
+
 	void printDetail() { // only used for debug
 		printDebugLog("Section id is : " + to_string(id_));
 		printDebugLog("The size of recorded ice energy is : " + to_string(recorded_energy_ice_.size()));
@@ -310,13 +342,13 @@ public:
 			<< "Vehicle_Type,ICE,ICE_NONCAV,BEV,BEV_NONCAV,PHEV,PHEV_NONCAN,HFCV,HFCV_NONCAV\n";
 
 		fout << "Travel_Time_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout << "Fuel_Used_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout << "Electricity_Used_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout << "Vehicle_Count_VT";
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
@@ -336,9 +368,9 @@ public:
 			<< "," << overall_fuel_consumed_ * price_gas_ / N_vehicles_
 			<< "," << overall_electricity_used_ * price_electricity_
 			<< "," << N_vehicles_;
-		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout.close();
@@ -891,77 +923,48 @@ int AAPIUnLoad()
 
 int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 {
-	printDebugLog("In the func of AAPIPreRouteChoiceCalculation at time " + to_string(time));
-	// update link cost before rerouting
-	double predition_horizon_in_s = network.prediction_horizon_ * 60;
+	//printDebugLog("In the func of AAPIPreRouteChoiceCalculation at time " + to_string(time));
+	//printDebugLog("Number of recorded data: " + to_string(network.map_links_[36482].recorded_energy_ice_.size()));
+
 	double timTrans = AKIGetDurationTransTime();
 	if (time < timTrans) // do not update cost in the warm up period
 		return 0;
-
-	int predict_cost_idx = (int)round((time - timTrans + predition_horizon_in_s) / HISTORICAL_DATA_INTERVAL);
+	// update link cost before rerouting
+	double prediction_horizon_in_s = network.prediction_horizon_ * 60;
+	int moving_average_window_size = int(MOVING_AVERAGE_WINDOW / MOVING_AVERAGE_INTERVAL) + 1;
+	int predict_interval = int(prediction_horizon_in_s / MOVING_AVERAGE_INTERVAL);
 	
-	if (predict_cost_idx > 10000) {
-		// update link cost based on the historical data
-		for (auto& item : network.map_links_) {
-			int secid = item.first;
-			Link& current_link = item.second;
+	// update link cost based on the historical data
+	for (auto& item : network.map_links_) {
+		int secid = item.first;
+		Link& current_link = item.second;
 
-			A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
-			double spd = secinf.speedLimit / 3.6;
-			double grade = secinf.slopePercentages[0] / 100;
-			double _free_flow_travel_time_in_s = secinf.length / spd;
-			double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
+		//A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
+		//double spd = secinf.speedLimit / 3.6;
+		//double grade = secinf.slopePercentages[0] / 100;
+		//double _free_flow_travel_time_in_s = secinf.length / spd;
+		//double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
 
-			// this is the cost for non-cavs and will use base travel time
-			ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
+		// this is the cost for non-cavs and will use base travel time
+		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
 
-			// these are the cost for all cavs
-			if (!network.eco_routing_with_travel_time_) {
-				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx] * network.price_gas_);
-				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_energy_bev_[predict_cost_idx] * network.price_electricity_);
-				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.recorded_energy_phev2_[predict_cost_idx] * network.price_electricity_);
-				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
-			}
-			else {
-				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-			}
+		// get predictions using moving average, will have 6 item, each is travel time, ice, bev, phev1, phev2, hfcv
+		vector<double> predicted_values = current_link.predictMovingAverage(moving_average_window_size, predict_interval);
+		// these are the cost for all cavs
+		if (!network.eco_routing_with_travel_time_) {
+			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, predicted_values[1] * network.price_gas_);
+			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, predicted_values[2] * network.price_electricity_);
+			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, predicted_values[3] * network.price_gas_ + predicted_values[4] * network.price_electricity_);
+			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, predicted_values[5] * network.price_electricity_);
+		}
+		else {
+			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, predicted_values[0]);
+			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, predicted_values[0]);
+			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, predicted_values[0]);
+			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, predicted_values[0]);
 		}
 	}
 	
-	// deprecated - historical data method
-	//if (!GENERATE_HISTORICAL_DATA) {
-	//	// update link cost based on the historical data
-	//	for (auto& item : network.map_links_) {
-	//		int secid = item.first;
-	//		Link& current_link = item.second;
-
-	//		A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
-	//		double spd = secinf.speedLimit / 3.6;
-	//		double grade = secinf.slopePercentages[0] / 100;
-	//		double _free_flow_travel_time_in_s = secinf.length / spd;
-	//		double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
-
-	//		// this is the cost for non-cavs and will use base travel time
-	//		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
-
-	//		// these are the cost for all cavs
-	//		if (!network.eco_routing_with_travel_time_) {
-	//			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx] * network.price_gas_);
-	//			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_energy_bev_[predict_cost_idx] * network.price_electricity_);
-	//			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.recorded_energy_phev2_[predict_cost_idx] * network.price_electricity_);
-	//			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
-	//		}
-	//		else {
-	//			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-	//			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-	//			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-	//			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_travel_time_[predict_cost_idx]);
-	//		}
-	//	}
-	//}
 	return 0;
 }
 
