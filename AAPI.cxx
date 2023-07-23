@@ -29,6 +29,8 @@ const double PRICE_GAS = 3.5;
 const double PRICE_ELECTRICITY = 0.25;
 const double SOC_MIN = 0.204; // for PHEV
 const double SOC_MAX = 0.88; // for PHEV
+const double MOVING_AVERAGE_INTERVAL = 60.0; // seconds
+double SIM_STEP = 1.0; // seconds, must be updated in the init() function
 
 void printDebugLog(string s);
 
@@ -65,18 +67,20 @@ public:
 		trave_time_accumulated_ = 0;
 		energy1_consumed_accumulated_ = 0;
 		energy2_consumed_accumulated_ = 0;
+		link_travel_time_ = 0;
+		update_count_ = 0;
 	}
 	Vehicle() : Vehicle(-1) {}
 
-	void updateEnergy(double energy1, double energy2, double sim_step) {
+	void updateEnergy(double energy1, double energy2, double traveled_time = SIM_STEP) {
 		// energy1 will be in the unit of gallon
 		// energy2 will be in the unit of kWh
 		energy1_consumed_accumulated_ += energy1;
 		energy2_consumed_accumulated_ += energy2;
-		trave_time_accumulated_ += sim_step;
+		trave_time_accumulated_ += traveled_time;
 		if (vehicle_type_ == VEHICLE_TYPE_PHEV || vehicle_type_ == VEHICLE_TYPE_PHEV_NONCAV) {
 			if (!(energy2 < 0 && soc_ > SOC_MAX)) { // no more charging when soc is greater than SOC_MAX
-				soc_ -= energy2 / battery_capacity_;
+				soc_ -= energy2 / battery_capacity_; // note that energy2 could be negative, which will charge the battery
 			}
 		}
 	}
@@ -85,23 +89,25 @@ public:
 	VehicleType vehicle_type_;
 	double trave_time_accumulated_;
 	double energy1_consumed_accumulated_;
-	double energy2_consumed_accumulated_;	// only used for PHEV to store fuel usage
-	double soc_;
-	double battery_capacity_;
+	double energy2_consumed_accumulated_;	
+	double soc_;				// only used for PHEV to store fuel usage
+	double battery_capacity_;	// only used for PHEV to store fuel usage
+	double link_travel_time_;	// for dummy vehicle and moving average
+	int update_count_;			// for dummy vehicle and moving average
 };
 
 class Link {
 public:
 	Link(int id) {
 		id_ = id;
-		resetEnergy();
+		resetEnergyData();
 		resetBaseEnergy();
-		resetPredictedEnergy();
+		resetRecordedEnergy();
 	}
 
 	Link() :Link(-1) {}
 
-	void resetEnergy() {
+	void resetEnergyData() {
 		travel_time_ = 0;
 		energy_ice_ = 0;
 		energy_bev_ = 0;
@@ -113,6 +119,7 @@ public:
 		cnt_bev_ = 0;
 		cnt_phev_ = 0;
 		cnt_hfcv_ = 0;
+		map_dummy_vehicles_.clear();
 	}
 
 	void resetBaseEnergy() {
@@ -125,85 +132,100 @@ public:
 	}
 
 
-	void resetPredictedEnergy() {
-		predicted_travel_time_.clear();
-		predicted_energy_ice_.clear();
-		predicted_energy_bev_.clear();
-		predicted_energy_phev1_.clear();
-		predicted_energy_phev2_.clear();
-		predicted_energy_hfcv_.clear();
+	void resetRecordedEnergy() {
+		recorded_travel_time_.clear();
+		recorded_energy_ice_.clear();
+		recorded_energy_bev_.clear();
+		recorded_energy_phev1_.clear();
+		recorded_energy_phev2_.clear();
+		recorded_energy_hfcv_.clear();
 	}
 
-	void addOneVehicleData(VehicleType vt, double energy1, double energy2, double travel_time) {
-		double travel_time_in_s = travel_time;
-		double travel_time_in_h = travel_time / 3600.0;
-		switch (vt)
-		{
-		case VehicleType::ICE:
-		case VehicleType::ICE_NONCAV:
-			energy_ice_ += energy1 * travel_time_in_s;
-			cnt_ice_++;
-			break;
-		case VehicleType::BEV:
-		case VehicleType::BEV_NONCAV:
-			energy_bev_ += energy2 * travel_time_in_h;
-			cnt_bev_++;
-			break;
-		case VehicleType::PHEV:
-		case VehicleType::PHEV_NONCAV:
-			energy_phev1_ += energy1 * travel_time_in_s;
-			energy_phev2_ += energy2 * travel_time_in_h;
-			cnt_phev_++;
-			break;
-		case VehicleType::HFCV:
-		case VehicleType::HFCV_NONCAV:
-			energy_hfcv_ += energy2 * travel_time_in_h;
-			cnt_phev_++;
-			break;
-		default:
-			break;
+	void addOneDataPoint(int id, VehicleType vt, double energy1, double energy2, double travel_time) {
+		
+		if (map_dummy_vehicles_.count(id) < 1) {
+			map_dummy_vehicles_[id] = Vehicle(id, vt);
+		}
+		Vehicle& dummy_vehicle = map_dummy_vehicles_[id];
+		
+		dummy_vehicle.update_count_++;
+		dummy_vehicle.link_travel_time_ += travel_time;
+
+		dummy_vehicle.energy1_consumed_accumulated_ += energy1;
+		dummy_vehicle.energy2_consumed_accumulated_ += energy2;
+	}
+
+	void pushBackRecordedData() {
+		// calculate vehicle-wise average
+		for (auto& item : map_dummy_vehicles_) {
+			Vehicle& vehicle = item.second;
+			VehicleType& vt = vehicle.vehicle_type_;
+			// one vehicle might only have partial data on one link, translate to the whole moving average interval
+			double energy1 = vehicle.energy1_consumed_accumulated_ / vehicle.update_count_ * (MOVING_AVERAGE_INTERVAL / SIM_STEP);	// in the unit of gallon
+			double energy2 = vehicle.energy2_consumed_accumulated_ / vehicle.update_count_ * (MOVING_AVERAGE_INTERVAL / SIM_STEP);	// in the unit of kWh
+
+			switch (vt)
+			{
+			case VehicleType::ICE:
+			case VehicleType::ICE_NONCAV:
+				energy_ice_ += energy1;
+				cnt_ice_++;
+				break;
+			case VehicleType::BEV:
+			case VehicleType::BEV_NONCAV:
+				energy_bev_ += energy2;
+				cnt_bev_++;
+				break;
+			case VehicleType::PHEV:
+			case VehicleType::PHEV_NONCAV:
+				energy_phev1_ += energy1;
+				energy_phev2_ += energy2;
+				cnt_phev_++;
+				break;
+			case VehicleType::HFCV:
+			case VehicleType::HFCV_NONCAV:
+				energy_hfcv_ += energy2;
+				cnt_phev_++;
+				break;
+			default:
+				break;
+			}
+			travel_time_ += vehicle.link_travel_time_ / vehicle.update_count_;	// in the unit of seconds
+			cnt_time_++;
 		}
 
-		travel_time_ += travel_time;
-		cnt_time_++;
-	}
-
-	void pushBackPredictedData() {
+		// average all vehicles as the link cost
 		if (cnt_time_ == 0)
-			predicted_travel_time_.push_back(base_travel_time_);
+			recorded_travel_time_.push_back(base_travel_time_);
 		else
-			predicted_travel_time_.push_back(travel_time_ / cnt_time_);
-
+			recorded_travel_time_.push_back(travel_time_ / cnt_time_);
 		if (cnt_ice_ == 0)
-			predicted_energy_ice_.push_back(base_energy_ice_);
+			recorded_energy_ice_.push_back(base_energy_ice_);
 		else
-			predicted_energy_ice_.push_back(energy_ice_ / cnt_ice_);
-
+			recorded_energy_ice_.push_back(energy_ice_ / cnt_ice_);
 		if (cnt_bev_ == 0)
-			predicted_energy_bev_.push_back(base_energy_bev_);
+			recorded_energy_bev_.push_back(base_energy_bev_);
 		else
-			predicted_energy_bev_.push_back(energy_bev_ / cnt_bev_);
-
+			recorded_energy_bev_.push_back(energy_bev_ / cnt_bev_);
 		if (cnt_phev_ == 0) {
-			predicted_energy_phev1_.push_back(base_energy_phev1_);
-			predicted_energy_phev2_.push_back(base_energy_phev2_);
+			recorded_energy_phev1_.push_back(base_energy_phev1_);
+			recorded_energy_phev2_.push_back(base_energy_phev2_);
 		}
 		else {
-			predicted_energy_phev1_.push_back(energy_phev1_ / cnt_phev_);
-			predicted_energy_phev2_.push_back(energy_phev2_ / cnt_phev_);
+			recorded_energy_phev1_.push_back(energy_phev1_ / cnt_phev_);
+			recorded_energy_phev2_.push_back(energy_phev2_ / cnt_phev_);
 		}
-
 		if (cnt_hfcv_ == 0)
-			predicted_energy_hfcv_.push_back(base_energy_hfcv_);
+			recorded_energy_hfcv_.push_back(base_energy_hfcv_);
 		else
-			predicted_energy_hfcv_.push_back(energy_ice_ / cnt_hfcv_);
+			recorded_energy_hfcv_.push_back(energy_ice_ / cnt_hfcv_);
 	}
 
 	void printDetail() { // only used for debug
 		printDebugLog("Section id is : " + to_string(id_));
-		printDebugLog("Predicted ice energy is :");
-		for (auto& v : predicted_energy_ice_)
-			printDebugLog(to_string(v));
+		printDebugLog("The size of recorded ice energy is : " + to_string(recorded_energy_ice_.size()));
+		//for (auto& v : recorded_energy_ice_)
+		//	printDebugLog(to_string(v));
 	}
 
 	int id_;
@@ -219,13 +241,14 @@ public:
 	double base_energy_phev1_; // for the gas usage
 	double base_energy_phev2_; // for the electricity usage
 	double base_energy_hfcv_;
-	vector<double> predicted_travel_time_;
-	vector<double> predicted_energy_ice_;
-	vector<double> predicted_energy_bev_;
-	vector<double> predicted_energy_phev1_; // for the gas usage
-	vector<double> predicted_energy_phev2_; // for the electricity usage
-	vector<double> predicted_energy_hfcv_;
+	vector<double> recorded_travel_time_;
+	vector<double> recorded_energy_ice_;
+	vector<double> recorded_energy_bev_;
+	vector<double> recorded_energy_phev1_; // for the gas usage
+	vector<double> recorded_energy_phev2_; // for the electricity usage
+	vector<double> recorded_energy_hfcv_;
 	int cnt_time_, cnt_ice_, cnt_bev_, cnt_phev_, cnt_hfcv_;
+	unordered_map<int, Vehicle> map_dummy_vehicles_;
 };
 
 class Network {
@@ -251,9 +274,9 @@ public:
 		summary_log_relative_path_ = "sim_logs\\summary.csv";
 
 		experiment_id_ = -1;
-		demand_percentage_ = 100;
-		prediction_horizon_ = 5;
-		cav_penetration_ = 100;
+		demand_percentage_ = 100;	// %
+		prediction_horizon_ = 5;	// min
+		cav_penetration_ = 100;		// %
 		eco_routing_with_travel_time_ = false;
 	}
 
@@ -335,24 +358,24 @@ public:
 		for (auto& item : map_links_) {
 			auto& link = item.second;
 			fout << endl << link.id_ << ",TIME";
-			for (auto& value : link.predicted_travel_time_) fout << "," << value;
+			for (auto& value : link.recorded_travel_time_) fout << "," << value;
 			fout << endl << link.id_ << ",ICE";
-			for (auto& value : link.predicted_energy_ice_) fout << "," << value;
+			for (auto& value : link.recorded_energy_ice_) fout << "," << value;
 			fout << endl << link.id_ << ",BEV";
-			for (auto& value : link.predicted_energy_bev_) fout << "," << value;
+			for (auto& value : link.recorded_energy_bev_) fout << "," << value;
 			fout << endl << link.id_ << ",PHEV1";
-			for (auto& value : link.predicted_energy_phev1_) fout << "," << value;
+			for (auto& value : link.recorded_energy_phev1_) fout << "," << value;
 			fout << endl << link.id_ << ",PHEV2";
-			for (auto& value : link.predicted_energy_phev2_) fout << "," << value;
+			for (auto& value : link.recorded_energy_phev2_) fout << "," << value;
 			fout << endl << link.id_ << ",HFCV";
-			for (auto& value : link.predicted_energy_hfcv_) fout << "," << value;
+			for (auto& value : link.recorded_energy_hfcv_) fout << "," << value;
 		}
 	}
 
 	void loadHistoricalData() {
 
 		for (auto& item : map_links_) {
-			item.second.resetPredictedEnergy();
+			item.second.resetRecordedEnergy();
 		}
 
 		string line, word;
@@ -375,22 +398,22 @@ public:
 			getline(ss, cost_type, ',');
 			vector<double>* target_vec = nullptr;
 			if (cost_type == "TIME") {
-				target_vec = &map_links_[link_id].predicted_travel_time_;
+				target_vec = &map_links_[link_id].recorded_travel_time_;
 			}
 			else if (cost_type == "ICE") {
-				target_vec = &map_links_[link_id].predicted_energy_ice_;
+				target_vec = &map_links_[link_id].recorded_energy_ice_;
 			}
 			else if (cost_type == "BEV") {
-				target_vec = &map_links_[link_id].predicted_energy_bev_;
+				target_vec = &map_links_[link_id].recorded_energy_bev_;
 			}
 			else if (cost_type == "PHEV1") {
-				target_vec = &map_links_[link_id].predicted_energy_phev1_;
+				target_vec = &map_links_[link_id].recorded_energy_phev1_;
 			}
 			else if (cost_type == "PHEV2") {
-				target_vec = &map_links_[link_id].predicted_energy_phev2_;
+				target_vec = &map_links_[link_id].recorded_energy_phev2_;
 			}
 			else if (cost_type == "HFCV") {
-				target_vec = &map_links_[link_id].predicted_energy_hfcv_;
+				target_vec = &map_links_[link_id].recorded_energy_hfcv_;
 			}
 
 			while (getline(ss, word, ',')) {
@@ -440,12 +463,11 @@ public:
 	string summary_log_relative_path_;
 
 	int experiment_id_;
-	double demand_percentage_;
-	double prediction_horizon_;
-	double cav_penetration_;
+	double demand_percentage_;	// %
+	double prediction_horizon_;	// min
+	double cav_penetration_;	// %
 	bool eco_routing_with_travel_time_;
 };
-
 Network network;
 
 double eng_sum[4];
@@ -724,6 +746,7 @@ int AAPIInit()
 	network.prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network.experiment_id_);
 	network.cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network.experiment_id_);
 	network.eco_routing_with_travel_time_ = ANGConnGetAttributeValueBool(attribute_eco_routing_with_travel_time, network.experiment_id_);
+	SIM_STEP = AKIGetSimulationStepTime();
 	network.N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
 	printDebugLog("Total number of links is : " + to_string(network.N_links_));
 	for (int i = 0; i < network.N_links_; i++) {
@@ -762,8 +785,9 @@ int AAPIInit()
 		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, network.map_links_[secid].base_travel_time_);
 	}
 
-	if (!GENERATE_HISTORICAL_DATA)
-		network.loadHistoricalData();
+	// deprecated - historical data method
+	//if (!GENERATE_HISTORICAL_DATA)
+	//	network.loadHistoricalData();
 
 	return 0;
 }
@@ -771,73 +795,58 @@ int AAPIInit()
 
 int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 {
-	double sim_step = AKIGetSimulationStepTime();
+	// record data when simulation starts, will include the warm-up period
+	// but only update(report) the total energy consumption for different types of vehicles after the warm-up
+	static double next_record_time = -1;// seconds
+	double record_interval = MOVING_AVERAGE_INTERVAL; // seconds
+	double sim_time = time - timTrans;
+	bool record_flag = false;
+	if (time >= next_record_time) {
+		record_flag = true;
+		next_record_time += record_interval;
+	}
+	for (auto& item : network.map_links_) {
+		int secid = item.first;
+		Link& current_link = item.second;
+		A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
+		double grade = secinf.slopePercentages[0] / 100.0;
+		int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+		for (int k = 0; k < nbveh; k++) {
+			InfVeh& vehinf = AKIVehStateGetVehicleInfSection(secid, k);
+			VehicleType vehicle_type = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
+			int vehicle_id = vehinf.idVeh;
+			double spd = vehinf.CurrentSpeed / 3.6;												// speed in m/s
+			double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * SIM_STEP);		// acceleration in m/s^2
+			double energy1; // fuel usage
+			double energy2; // electricity usage
+			Emission(spd, grade, acc, vehicle_type, energy1, energy2);
+			double section_travel_time = secinf.length / max(spd, 2.0);
+			energy1 *= SIM_STEP; // now will be in the unit of Gallon
+			energy2 *= SIM_STEP / 3600.0; // now will be in the unit of kWh
 
-	// update the total energy consumption for different types of vehicles in every simlulation step
-	if (time - timTrans > 0) {
-		for (auto& item : network.map_links_) {
-			int secid = item.first;
-			A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
-			double grade = secinf.slopePercentages[0] / 100.0;
-			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-			for (int k = 0; k < nbveh; k++) {
-				InfVeh& vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-				VehicleType vehicle_type = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
-				double spd = vehinf.CurrentSpeed / 3.6;												// speed in m/s
-				double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
+			// record all data
+			current_link.addOneDataPoint(vehicle_id, vehicle_type, energy1, energy2, section_travel_time);
 
-				if (network.map_vehicles_.count(vehinf.idVeh) < 1) {
-					network.map_vehicles_[vehinf.idVeh] = Vehicle(vehinf.idVeh, vehicle_type);
+			// only update(report) the total energy consumption for different types of vehicles after the warm-up
+			if (time - timTrans > 0) {
+				if (network.map_vehicles_.count(vehicle_id) < 1) {
+					network.map_vehicles_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
 					network.vehicle_cnt_per_vehicle_type_[vehicle_type]++;
 				}
-
-				Vehicle& cur_vehicle = network.map_vehicles_[vehinf.idVeh];
-
-				double energy1; // fuel usage
-				double energy2; // electricity usage
-				Emission(spd, grade, acc, vehicle_type, energy1, energy2, cur_vehicle.soc_);
-				energy1 *= sim_step; // now will be in the unit of Gallon
-				energy2 *= sim_step / 3600.0; // now will be in the unit of kWh
-				cur_vehicle.updateEnergy(energy1, energy2, sim_step);
-
+				Vehicle& cur_vehicle = network.map_vehicles_[vehicle_id];
+				cur_vehicle.updateEnergy(energy1, energy2, SIM_STEP);
 				network.overall_fuel_consumed_ += energy1;
 				network.fuel_consumed_per_vehicle_type_[vehicle_type] += energy1;
 				network.overall_electricity_used_ += energy2;
 				network.electricity_used_per_vehicle_type_[vehicle_type] += energy2;
-				network.overall_travel_time_ += sim_step;
-				network.travel_time_per_vehicle_type_[vehicle_type] += sim_step;
+				network.overall_travel_time_ += SIM_STEP;
+				network.travel_time_per_vehicle_type_[vehicle_type] += SIM_STEP;
 			}
 		}
-	}
 
-	if (GENERATE_HISTORICAL_DATA) {
-		// only used to record historical data, recorded data will be write to file if simulation ends successfully
-		// record cost for every link every 5 minutes
-		static double next_record_time = 0; // seconds
-		double record_interval = HISTORICAL_DATA_INTERVAL; // seconds
-		double sim_time = time - timTrans;
-		if (sim_time >= next_record_time - sim_step) {
-			next_record_time += record_interval;
-			for (auto& item : network.map_links_) {
-				int secid = item.first;
-				Link& current_link = item.second;
-				A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
-				double grade = secinf.slopePercentages[0] / 100.0;
-				int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
-				current_link.resetEnergy();
-				for (int k = 0; k < nbveh; k++) {
-					InfVeh& vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-					VehicleType vehicle_type = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
-					double spd = vehinf.CurrentSpeed / 3.6;												// speed in m/s
-					double acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * sim_step);		// acceleration in m/s^2
-					double energy1; // fuel usage
-					double energy2; // electricity usage
-					Emission(spd, grade, acc, vehicle_type, energy1, energy2);
-					double section_travel_time = secinf.length / max(spd, 2.0);
-					current_link.addOneVehicleData(vehicle_type, energy1, energy2, section_travel_time);
-				}
-				current_link.pushBackPredictedData();
-			}
+		if (record_flag) {
+			current_link.pushBackRecordedData();
+			current_link.resetEnergyData();
 		}
 	}
 
@@ -866,8 +875,10 @@ int AAPIFinish()
 
 	printDebugLog("Statistic will be output to the logs directory");
 	network.saveLogs();			// save simulation statistics in the \logs dir
-	if (GENERATE_HISTORICAL_DATA)
-		network.saveHistoricalData();	// save historical data to the file
+
+	// deprecated - historical data method
+	//if (GENERATE_HISTORICAL_DATA)
+	//	network.saveHistoricalData();	// save historical data to the file
 
 	return 0;
 }
@@ -880,6 +891,7 @@ int AAPIUnLoad()
 
 int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 {
+	printDebugLog("In the func of AAPIPreRouteChoiceCalculation at time " + to_string(time));
 	// update link cost before rerouting
 	double predition_horizon_in_s = network.prediction_horizon_ * 60;
 	double timTrans = AKIGetDurationTransTime();
@@ -887,8 +899,9 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 		return 0;
 
 	int predict_cost_idx = (int)round((time - timTrans + predition_horizon_in_s) / HISTORICAL_DATA_INTERVAL);
-	if (!GENERATE_HISTORICAL_DATA) {
-		// update link cost based on the predicted data
+	
+	if (predict_cost_idx > 10000) {
+		// update link cost based on the historical data
 		for (auto& item : network.map_links_) {
 			int secid = item.first;
 			Link& current_link = item.second;
@@ -904,19 +917,51 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 
 			// these are the cost for all cavs
 			if (!network.eco_routing_with_travel_time_) {
-				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx] * network.price_gas_);
-				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_energy_bev_[predict_cost_idx] * network.price_electricity_);
-				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.predicted_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.predicted_energy_phev2_[predict_cost_idx] * network.price_electricity_);
-				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.predicted_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
+				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx] * network.price_gas_);
+				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_energy_bev_[predict_cost_idx] * network.price_electricity_);
+				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.recorded_energy_phev2_[predict_cost_idx] * network.price_electricity_);
+				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
 			}
 			else {
-				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx]);
-				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_travel_time_[predict_cost_idx]);
-				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.predicted_travel_time_[predict_cost_idx]);
-				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.predicted_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_travel_time_[predict_cost_idx]);
 			}
 		}
 	}
+	
+	// deprecated - historical data method
+	//if (!GENERATE_HISTORICAL_DATA) {
+	//	// update link cost based on the historical data
+	//	for (auto& item : network.map_links_) {
+	//		int secid = item.first;
+	//		Link& current_link = item.second;
+
+	//		A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
+	//		double spd = secinf.speedLimit / 3.6;
+	//		double grade = secinf.slopePercentages[0] / 100;
+	//		double _free_flow_travel_time_in_s = secinf.length / spd;
+	//		double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
+
+	//		// this is the cost for non-cavs and will use base travel time
+	//		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
+
+	//		// these are the cost for all cavs
+	//		if (!network.eco_routing_with_travel_time_) {
+	//			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx] * network.price_gas_);
+	//			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_energy_bev_[predict_cost_idx] * network.price_electricity_);
+	//			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.recorded_energy_phev2_[predict_cost_idx] * network.price_electricity_);
+	//			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_energy_hfcv_[predict_cost_idx] * network.price_electricity_);
+	//		}
+	//		else {
+	//			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+	//			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+	//			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+	//			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.recorded_travel_time_[predict_cost_idx]);
+	//		}
+	//	}
+	//}
 	return 0;
 }
 
