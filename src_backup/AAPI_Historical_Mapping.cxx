@@ -248,7 +248,7 @@ public:
 		price_electricity_ = PRICE_ELECTRICITY; // define electric price here
 
 		history_file_replative_path_ = "data_history\\history.txt";
-		summary_log_relative_path_ = "sim_logs\\summary.csv";
+		summary_log_relative_path_ = "sim_logs\\summary_historical_data.csv";
 
 		experiment_id_ = -1;
 		demand_percentage_ = 100;
@@ -287,13 +287,13 @@ public:
 			<< "Vehicle_Type,ICE,ICE_NONCAV,BEV,BEV_NONCAV,PHEV,PHEV_NONCAN,HFCV,HFCV_NONCAV\n";
 
 		fout << "Travel_Time_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout << "Fuel_Used_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout << "Electricity_Used_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout << "Vehicle_Count_VT";
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
@@ -313,9 +313,9 @@ public:
 			<< "," << overall_fuel_consumed_ * price_gas_ / N_vehicles_
 			<< "," << overall_electricity_used_ * price_electricity_
 			<< "," << N_vehicles_;
-		for (auto& vt : valid_vehicle_type_list) fout << "," << travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout.close();
@@ -904,7 +904,7 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 
 			// these are the cost for all cavs
 			if (!network.eco_routing_with_travel_time_) {
-				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_travel_time_[predict_cost_idx] * network.price_gas_);
+				ANGConnSetAttributeValueDouble(link_attribute_ice, secid, current_link.predicted_energy_ice_[predict_cost_idx] * network.price_gas_);
 				ANGConnSetAttributeValueDouble(link_attribute_bev, secid, current_link.predicted_energy_bev_[predict_cost_idx] * network.price_electricity_);
 				ANGConnSetAttributeValueDouble(link_attribute_phev, secid, current_link.predicted_energy_phev1_[predict_cost_idx] * network.price_gas_ + current_link.predicted_energy_phev2_[predict_cost_idx] * network.price_electricity_);
 				ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, current_link.predicted_energy_hfcv_[predict_cost_idx] * network.price_electricity_);

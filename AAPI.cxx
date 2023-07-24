@@ -90,7 +90,7 @@ public:
 	VehicleType vehicle_type_;
 	double trave_time_accumulated_;
 	double energy1_consumed_accumulated_;
-	double energy2_consumed_accumulated_;	
+	double energy2_consumed_accumulated_;
 	double soc_;				// only used for PHEV to store fuel usage
 	double battery_capacity_;	// only used for PHEV to store fuel usage
 	double link_travel_time_;	// for dummy vehicle and moving average
@@ -143,12 +143,12 @@ public:
 	}
 
 	void addOneDataPoint(int id, VehicleType vt, double energy1, double energy2, double travel_time) {
-		
+
 		if (map_dummy_vehicles_.count(id) < 1) {
 			map_dummy_vehicles_[id] = Vehicle(id, vt);
 		}
 		Vehicle& dummy_vehicle = map_dummy_vehicles_[id];
-		
+
 		dummy_vehicle.update_count_++;
 		dummy_vehicle.link_travel_time_ += travel_time;
 
@@ -223,7 +223,7 @@ public:
 	}
 
 	vector<double> predictMovingAverage(int mv_window, int predict_interval) {
-		vector<double> predicted_values(6,0);
+		vector<double> predicted_values(6, 0);
 
 		vector<double> record_travel_time(recorded_travel_time_.end() - mv_window, recorded_travel_time_.end());
 		predicted_values[0] = predictFuture(record_travel_time, mv_window + predict_interval - 1);
@@ -241,7 +241,7 @@ public:
 		return predicted_values;
 	}
 
-	double predictFuture(vector<double> &record_vector, int future_idx) {
+	double predictFuture(vector<double>& record_vector, int future_idx) {
 		int n = record_vector.size();
 		while (record_vector.size() < future_idx + 1) {
 			double sum = 0;
@@ -342,13 +342,13 @@ public:
 			<< "Vehicle_Type,ICE,ICE_NONCAV,BEV,BEV_NONCAV,PHEV,PHEV_NONCAN,HFCV,HFCV_NONCAV\n";
 
 		fout << "Travel_Time_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout << "Fuel_Used_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout << "Electricity_Used_VT_Avg";
-		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout << "Vehicle_Count_VT";
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
@@ -368,9 +368,9 @@ public:
 			<< "," << overall_fuel_consumed_ * price_gas_ / N_vehicles_
 			<< "," << overall_electricity_used_ * price_electricity_
 			<< "," << N_vehicles_;
-		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
-		for (auto& vt : valid_vehicle_type_list) fout << "," << (vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt];
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
 		fout.close();
@@ -933,7 +933,7 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 	double prediction_horizon_in_s = network.prediction_horizon_ * 60;
 	int moving_average_window_size = int(MOVING_AVERAGE_WINDOW / MOVING_AVERAGE_INTERVAL) + 1;
 	int predict_interval = int(prediction_horizon_in_s / MOVING_AVERAGE_INTERVAL);
-	
+
 	// update link cost based on the historical data
 	for (auto& item : network.map_links_) {
 		int secid = item.first;
@@ -964,7 +964,7 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, predicted_values[0]);
 		}
 	}
-	
+
 	return 0;
 }
 
