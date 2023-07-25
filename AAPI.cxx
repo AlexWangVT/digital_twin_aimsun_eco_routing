@@ -152,8 +152,8 @@ public:
 		dummy_vehicle.update_count_++;
 		dummy_vehicle.link_travel_time_ += travel_time;
 
-		dummy_vehicle.energy1_consumed_accumulated_ += energy1;
-		dummy_vehicle.energy2_consumed_accumulated_ += energy2;
+		dummy_vehicle.energy1_consumed_accumulated_ += energy1 * travel_time;
+		dummy_vehicle.energy2_consumed_accumulated_ += energy2 * travel_time / 3600.0;
 	}
 
 	void pushBackRecordedData() {
@@ -162,8 +162,8 @@ public:
 			Vehicle& vehicle = item.second;
 			VehicleType& vt = vehicle.vehicle_type_;
 			// one vehicle might only have partial data on one link, translate to the whole moving average interval
-			double energy1 = vehicle.energy1_consumed_accumulated_ / vehicle.update_count_ * (MOVING_AVERAGE_INTERVAL / SIM_STEP);	// in the unit of gallon
-			double energy2 = vehicle.energy2_consumed_accumulated_ / vehicle.update_count_ * (MOVING_AVERAGE_INTERVAL / SIM_STEP);	// in the unit of kWh
+			double energy1 = vehicle.energy1_consumed_accumulated_ / vehicle.update_count_;	// in the unit of gallon
+			double energy2 = vehicle.energy2_consumed_accumulated_ / vehicle.update_count_;	// in the unit of kWh
 
 			switch (vt)
 			{
@@ -334,10 +334,10 @@ public:
 			<< "CAV_Penetration," << cav_penetration_ << ",%\n"
 			<< "Eco_Routing_with_Travel_Time" << eco_routing_with_travel_time_ << "\n"
 			<< "Overall_Travel_Time_Avg," << overall_travel_time_ / N_vehicles_ << ",s\n"
-			<< "Overall_Fuel_Used_Avg," << overall_fuel_consumed_ / N_vehicles_ << ",gallon\n"
-			<< "Overall_Electricity_Used_Avg," << overall_electricity_used_ / N_vehicles_ << ",kWh\n"
-			<< "Overall_Fuel_Cost_Avg," << overall_fuel_consumed_ * price_gas_ / N_vehicles_ << ",dollars\n"
-			<< "Overall_Electricity_Cost_Avg," << overall_electricity_used_ * price_electricity_ / N_vehicles_ << ",dollars\n"
+			<< "Overall_Fuel_Used_," << overall_fuel_consumed_ << ",gallon\n"
+			<< "Overall_Electricity_Used_," << overall_electricity_used_ << ",kWh\n"
+			<< "Overall_Fuel_Cost_," << overall_fuel_consumed_ * price_gas_ << ",dollars\n"
+			<< "Overall_Electricity_Cost_," << overall_electricity_used_ * price_electricity_ << ",dollars\n"
 			<< "Total_Number_of_Vehicles," << N_vehicles_ << "\n"
 			<< "Vehicle_Type,ICE,ICE_NONCAV,BEV,BEV_NONCAV,PHEV,PHEV_NONCAN,HFCV,HFCV_NONCAV\n";
 
@@ -363,9 +363,9 @@ public:
 			<< "," << cav_penetration_
 			<< "," << eco_routing_with_travel_time_
 			<< "," << overall_travel_time_ / N_vehicles_
-			<< "," << overall_fuel_consumed_ / N_vehicles_
-			<< "," << overall_electricity_used_ / N_vehicles_
-			<< "," << overall_fuel_consumed_ * price_gas_ / N_vehicles_
+			<< "," << overall_fuel_consumed_
+			<< "," << overall_electricity_used_
+			<< "," << overall_fuel_consumed_ * price_gas_
 			<< "," << overall_electricity_used_ * price_electricity_
 			<< "," << N_vehicles_;
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
@@ -852,7 +852,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 			double energy1; // fuel usage
 			double energy2; // electricity usage
 			Emission(spd, grade, acc, vehicle_type, energy1, energy2);
-			double section_travel_time = secinf.length / max(spd, 2.0);
+			double section_travel_time = secinf.length / max(spd, 2.0); // in the unit of seconds
 			energy1 *= SIM_STEP; // now will be in the unit of Gallon
 			energy2 *= SIM_STEP / 3600.0; // now will be in the unit of kWh
 
