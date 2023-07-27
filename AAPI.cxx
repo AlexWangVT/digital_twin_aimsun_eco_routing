@@ -325,6 +325,7 @@ public:
 		printDebugLog(log_file_name);
 
 		N_vehicles_ = map_vehicles_.size();
+		int N_vehicles_second_hour_ = map_vehicles_second_hour_.size();
 
 		// write to a seperate file
 		ofstream fout;
@@ -353,6 +354,25 @@ public:
 		fout << "Vehicle_Count_VT";
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
 		fout << endl;
+		// for the second hour
+		fout << "For the second hour:\n";
+		fout << overall_fuel_consumed_second_hour_
+			<< "," << overall_electricity_used_second_hour_
+			<< "," << overall_fuel_consumed_second_hour_ * price_gas_
+			<< "," << overall_electricity_used_second_hour_ * price_electricity_
+			<< "," << N_vehicles_second_hour_ << endl;
+		fout << "Travel_Time_VT_Avg";
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		fout << endl;
+		fout << "Fuel_Used_VT_Avg"; 
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		fout << endl;
+		fout << "Electricity_Used_VT_Avg";
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		fout << endl;
+		fout << "Vehicle_Count_VT"; 
+		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
+		fout << endl;
 		fout.close();
 
 		// write to the summary file
@@ -372,6 +392,16 @@ public:
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
+		// for the second hour
+		fout << "," << overall_fuel_consumed_second_hour_
+			<< "," << overall_electricity_used_second_hour_
+			<< "," << overall_fuel_consumed_second_hour_ * price_gas_
+			<< "," << overall_electricity_used_second_hour_ * price_electricity_
+			<< "," << N_vehicles_second_hour_;
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
 		fout << endl;
 		fout.close();
 	}
@@ -493,6 +523,16 @@ public:
 	double price_electricity_;	// US dollar per kWh
 	string history_file_replative_path_;
 	string summary_log_relative_path_;
+
+	// statistics for the second hour
+	unordered_map<int, Vehicle> map_vehicles_second_hour_;
+	double overall_travel_time_second_hour_;
+	double overall_fuel_consumed_second_hour_;
+	double overall_electricity_used_second_hour_;
+	unordered_map<VehicleType, double> travel_time_second_hour_per_vehicle_type_;
+	unordered_map<VehicleType, double> fuel_consumed_second_hour_per_vehicle_type_;
+	unordered_map<VehicleType, double> electricity_used_second_hour_per_vehicle_type_;
+	unordered_map<VehicleType, int> vehicle_cnt_second_hour_per_vehicle_type_;
 
 	int experiment_id_;
 	double demand_percentage_;	// %
@@ -873,6 +913,21 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				network.electricity_used_per_vehicle_type_[vehicle_type] += energy2;
 				network.overall_travel_time_ += SIM_STEP;
 				network.travel_time_per_vehicle_type_[vehicle_type] += SIM_STEP;
+			}			
+			// update(report) the total energy consumption for different types of vehicles after the first hour
+			if (time - timTrans > 3600) {
+				if (network.map_vehicles_second_hour_.count(vehicle_id) < 1) {
+					network.map_vehicles_second_hour_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
+					network.vehicle_cnt_second_hour_per_vehicle_type_[vehicle_type]++;
+				}
+				Vehicle& cur_vehicle = network.map_vehicles_second_hour_[vehicle_id];
+				cur_vehicle.updateEnergy(energy1, energy2, SIM_STEP);
+				network.overall_fuel_consumed_second_hour_ += energy1;
+				network.fuel_consumed_second_hour_per_vehicle_type_[vehicle_type] += energy1;
+				network.overall_electricity_used_second_hour_ += energy2;
+				network.electricity_used_second_hour_per_vehicle_type_[vehicle_type] += energy2;
+				network.overall_travel_time_second_hour_ += SIM_STEP;
+				network.travel_time_second_hour_per_vehicle_type_[vehicle_type] += SIM_STEP;
 			}
 		}
 
