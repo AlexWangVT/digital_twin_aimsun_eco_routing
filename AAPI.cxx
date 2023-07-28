@@ -333,7 +333,7 @@ public:
 		fout << "Demand_Percentage," << demand_percentage_ << ",%\n"
 			<< "Prediction_Horizon," << prediction_horizon_ << ",min\n"
 			<< "CAV_Penetration," << cav_penetration_ << ",%\n"
-			<< "Eco_Routing_with_Travel_Time" << eco_routing_with_travel_time_ << "\n"
+			<< "Eco_Routing_with_Travel_Time," << eco_routing_with_travel_time_ << "\n"
 			<< "Overall_Travel_Time_Avg," << overall_travel_time_ / N_vehicles_ << ",s\n"
 			<< "Overall_Fuel_Used_," << overall_fuel_consumed_ << ",gallon\n"
 			<< "Overall_Electricity_Used_," << overall_electricity_used_ << ",kWh\n"
@@ -540,7 +540,7 @@ public:
 	double cav_penetration_;	// %
 	bool eco_routing_with_travel_time_;
 };
-Network network;
+Network* network;
 
 double eng_sum[4];
 
@@ -781,6 +781,7 @@ int AAPILoad()
 
 int AAPIInit()
 {
+	network = new Network();
 	//printDebugLog("In AAPIInit()");
 	ANGConnEnableVehiclesInBatch(true);
 
@@ -813,53 +814,53 @@ int AAPIInit()
 	void* attribute_prediction = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::prediction_horizon"));
 	void* attribute_cav_penetration = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
 	void* attribute_eco_routing_with_travel_time = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::eco_routing_with_travel_time"));
-	network.experiment_id_ = ANGConnGetExperimentId();
-	network.demand_percentage_ = ANGConnGetAttributeValueDouble(attribute_demand, network.experiment_id_);
-	network.prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network.experiment_id_);
-	network.cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network.experiment_id_);
-	network.eco_routing_with_travel_time_ = ANGConnGetAttributeValueBool(attribute_eco_routing_with_travel_time, network.experiment_id_);
+	network->experiment_id_ = ANGConnGetExperimentId();
+	network->demand_percentage_ = ANGConnGetAttributeValueDouble(attribute_demand, network->experiment_id_);
+	network->prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network->experiment_id_);
+	network->cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network->experiment_id_);
+	network->eco_routing_with_travel_time_ = ANGConnGetAttributeValueBool(attribute_eco_routing_with_travel_time, network->experiment_id_);
 	SIM_STEP = AKIGetSimulationStepTime();
-	network.N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
-	printDebugLog("Total number of links is : " + to_string(network.N_links_));
-	for (int i = 0; i < network.N_links_; i++) {
+	network->N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
+	printDebugLog("Total number of links is : " + to_string(network->N_links_));
+	for (int i = 0; i < network->N_links_; i++) {
 		int secid = AKIInfNetGetSectionANGId(i);
 
-		if (network.map_links_.count(secid) < 1)
-			network.map_links_[secid] = Link(secid);
+		if (network->map_links_.count(secid) < 1)
+			network->map_links_[secid] = Link(secid);
 
 		A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
 		double spd = secinf.speedLimit / 3.6;
 		double grade = secinf.slopePercentages[0] / 100.0;
 
-		Emission(spd, grade, 0.0, network.map_links_[secid].base_energy_ice_, network.map_links_[secid].base_energy_bev_, network.map_links_[secid].base_energy_phev1_,
-			network.map_links_[secid].base_energy_phev2_, network.map_links_[secid].base_energy_hfcv_);
+		Emission(spd, grade, 0.0, network->map_links_[secid].base_energy_ice_, network->map_links_[secid].base_energy_bev_, network->map_links_[secid].base_energy_phev1_,
+			network->map_links_[secid].base_energy_phev2_, network->map_links_[secid].base_energy_hfcv_);
 
 		double _free_flow_travel_time_in_s = secinf.length / spd;
 		double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
 		// record base cost
-		network.map_links_[secid].base_travel_time_ = _free_flow_travel_time_in_s;
-		network.map_links_[secid].base_energy_ice_ *= _free_flow_travel_time_in_s;
-		network.map_links_[secid].base_energy_bev_ *= _free_flow_travel_time_in_h;
-		network.map_links_[secid].base_energy_phev1_ *= _free_flow_travel_time_in_s;
-		network.map_links_[secid].base_energy_phev2_ *= _free_flow_travel_time_in_h;
-		network.map_links_[secid].base_energy_hfcv_ *= _free_flow_travel_time_in_h;
+		network->map_links_[secid].base_travel_time_ = _free_flow_travel_time_in_s;
+		network->map_links_[secid].base_energy_ice_ *= _free_flow_travel_time_in_s;
+		network->map_links_[secid].base_energy_bev_ *= _free_flow_travel_time_in_h;
+		network->map_links_[secid].base_energy_phev1_ *= _free_flow_travel_time_in_s;
+		network->map_links_[secid].base_energy_phev2_ *= _free_flow_travel_time_in_h;
+		network->map_links_[secid].base_energy_hfcv_ *= _free_flow_travel_time_in_h;
 
-		//ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_energy_ice_ * network.price_gas_);
-		//ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_energy_bev_ * network.price_electricity_);
-		//ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_energy_phev1_ * network.price_gas_ + network.map_links_[secid].base_energy_phev2_ * network.price_electricity_);
-		//ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_energy_hfcv_ * network.price_electricity_);
+		//ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network->map_links_[secid].base_energy_ice_ * network->price_gas_);
+		//ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network->map_links_[secid].base_energy_bev_ * network->price_electricity_);
+		//ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network->map_links_[secid].base_energy_phev1_ * network->price_gas_ + network->map_links_[secid].base_energy_phev2_ * network->price_electricity_);
+		//ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network->map_links_[secid].base_energy_hfcv_ * network->price_electricity_);
 
 		// init cost will be the travel time of the link
-		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network.map_links_[secid].base_travel_time_);
-		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network.map_links_[secid].base_travel_time_);
-		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network.map_links_[secid].base_travel_time_);
-		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network.map_links_[secid].base_travel_time_);
-		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, network.map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_ice, secid, network->map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_bev, secid, network->map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_phev, secid, network->map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network->map_links_[secid].base_travel_time_);
+		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, network->map_links_[secid].base_travel_time_);
 	}
 
 	// deprecated - historical data method
 	//if (!GENERATE_HISTORICAL_DATA)
-	//	network.loadHistoricalData();
+	//	network->loadHistoricalData();
 
 	return 0;
 }
@@ -877,7 +878,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 		record_flag = true;
 		next_record_time += record_interval;
 	}
-	for (auto& item : network.map_links_) {
+	for (auto& item : network->map_links_) {
 		int secid = item.first;
 		Link& current_link = item.second;
 		A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
@@ -892,7 +893,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 			double energy1; // fuel usage
 			double energy2; // electricity usage
 			Emission(spd, grade, acc, vehicle_type, energy1, energy2);
-			double section_travel_time = secinf.length / max(spd, 2.0); // in the unit of seconds
+			double section_travel_time = secinf.length / max(spd, 0.1); // in the unit of seconds
 			energy1 *= SIM_STEP; // now will be in the unit of Gallon
 			energy2 *= SIM_STEP / 3600.0; // now will be in the unit of kWh
 
@@ -901,33 +902,33 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 
 			// only update(report) the total energy consumption for different types of vehicles after the warm-up
 			if (time - timTrans > 0) {
-				if (network.map_vehicles_.count(vehicle_id) < 1) {
-					network.map_vehicles_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
-					network.vehicle_cnt_per_vehicle_type_[vehicle_type]++;
+				if (network->map_vehicles_.count(vehicle_id) < 1) {
+					network->map_vehicles_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
+					network->vehicle_cnt_per_vehicle_type_[vehicle_type]++;
 				}
-				Vehicle& cur_vehicle = network.map_vehicles_[vehicle_id];
+				Vehicle& cur_vehicle = network->map_vehicles_[vehicle_id];
 				cur_vehicle.updateEnergy(energy1, energy2, SIM_STEP);
-				network.overall_fuel_consumed_ += energy1;
-				network.fuel_consumed_per_vehicle_type_[vehicle_type] += energy1;
-				network.overall_electricity_used_ += energy2;
-				network.electricity_used_per_vehicle_type_[vehicle_type] += energy2;
-				network.overall_travel_time_ += SIM_STEP;
-				network.travel_time_per_vehicle_type_[vehicle_type] += SIM_STEP;
+				network->overall_fuel_consumed_ += energy1;
+				network->fuel_consumed_per_vehicle_type_[vehicle_type] += energy1;
+				network->overall_electricity_used_ += energy2;
+				network->electricity_used_per_vehicle_type_[vehicle_type] += energy2;
+				network->overall_travel_time_ += SIM_STEP;
+				network->travel_time_per_vehicle_type_[vehicle_type] += SIM_STEP;
 			}			
 			// update(report) the total energy consumption for different types of vehicles after the first hour
 			if (time - timTrans > 3600) {
-				if (network.map_vehicles_second_hour_.count(vehicle_id) < 1) {
-					network.map_vehicles_second_hour_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
-					network.vehicle_cnt_second_hour_per_vehicle_type_[vehicle_type]++;
+				if (network->map_vehicles_second_hour_.count(vehicle_id) < 1) {
+					network->map_vehicles_second_hour_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
+					network->vehicle_cnt_second_hour_per_vehicle_type_[vehicle_type]++;
 				}
-				Vehicle& cur_vehicle = network.map_vehicles_second_hour_[vehicle_id];
+				Vehicle& cur_vehicle = network->map_vehicles_second_hour_[vehicle_id];
 				cur_vehicle.updateEnergy(energy1, energy2, SIM_STEP);
-				network.overall_fuel_consumed_second_hour_ += energy1;
-				network.fuel_consumed_second_hour_per_vehicle_type_[vehicle_type] += energy1;
-				network.overall_electricity_used_second_hour_ += energy2;
-				network.electricity_used_second_hour_per_vehicle_type_[vehicle_type] += energy2;
-				network.overall_travel_time_second_hour_ += SIM_STEP;
-				network.travel_time_second_hour_per_vehicle_type_[vehicle_type] += SIM_STEP;
+				network->overall_fuel_consumed_second_hour_ += energy1;
+				network->fuel_consumed_second_hour_per_vehicle_type_[vehicle_type] += energy1;
+				network->overall_electricity_used_second_hour_ += energy2;
+				network->electricity_used_second_hour_per_vehicle_type_[vehicle_type] += energy2;
+				network->overall_travel_time_second_hour_ += SIM_STEP;
+				network->travel_time_second_hour_per_vehicle_type_[vehicle_type] += SIM_STEP;
 			}
 		}
 
@@ -947,13 +948,13 @@ int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 
 int AAPIFinish()
 {
-	printDebugLog("Demand_Percentage is " + to_string(network.demand_percentage_) + "% , Prediction_Horizon is " + to_string(network.prediction_horizon_) + " min.");
-	printDebugLog("CAV_Penetration is " + to_string(network.cav_penetration_) + "% , Eco_Routing_with_Travel_Time is " + to_string(network.eco_routing_with_travel_time_) + " .");
-	printDebugLog("Network overall fuel usage is : " + to_string(network.overall_fuel_consumed_) + " Gallon.");
-	printDebugLog("Network overall electricity usage is : " + to_string(network.overall_electricity_used_) + " kWh.");
-	printDebugLog("Network overall travel time is : " + to_string(network.overall_travel_time_) + " seconds.");
-	printDebugLog("Total simulated vehicles: " + to_string(network.getTotalNumberVehicles()));
-	printDebugLog("Average travel time is : " + to_string(network.getAverageTravelTime()) + " seconds. Maimum of travel time is " + to_string(network.getMaxTravelTime()) + " seconds.");
+	printDebugLog("Demand_Percentage is " + to_string(network->demand_percentage_) + "% , Prediction_Horizon is " + to_string(network->prediction_horizon_) + " min.");
+	printDebugLog("CAV_Penetration is " + to_string(network->cav_penetration_) + "% , Eco_Routing_with_Travel_Time is " + to_string(network->eco_routing_with_travel_time_) + " .");
+	printDebugLog("Network overall fuel usage is : " + to_string(network->overall_fuel_consumed_) + " Gallon.");
+	printDebugLog("Network overall electricity usage is : " + to_string(network->overall_electricity_used_) + " kWh.");
+	printDebugLog("Network overall travel time is : " + to_string(network->overall_travel_time_) + " seconds.");
+	printDebugLog("Total simulated vehicles: " + to_string(network->getTotalNumberVehicles()));
+	printDebugLog("Average travel time is : " + to_string(network->getAverageTravelTime()) + " seconds. Maimum of travel time is " + to_string(network->getMaxTravelTime()) + " seconds.");
 
 	if (AKIGetCurrentSimulationTime() < AKIGetEndSimTime()) {
 		printDebugLog("Simulation is not finished, no output files.");
@@ -961,11 +962,13 @@ int AAPIFinish()
 	}
 
 	printDebugLog("Statistic will be output to the logs directory");
-	network.saveLogs();			// save simulation statistics in the \logs dir
+	network->saveLogs();			// save simulation statistics in the \logs dir
 
 	// deprecated - historical data method
 	//if (GENERATE_HISTORICAL_DATA)
-	//	network.saveHistoricalData();	// save historical data to the file
+	//	network->saveHistoricalData();	// save historical data to the file
+
+	delete network;
 
 	return 0;
 }
@@ -979,18 +982,18 @@ int AAPIUnLoad()
 int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 {
 	//printDebugLog("In the func of AAPIPreRouteChoiceCalculation at time " + to_string(time));
-	//printDebugLog("Number of recorded data: " + to_string(network.map_links_[36482].recorded_energy_ice_.size()));
+	//printDebugLog("Number of recorded data: " + to_string(network->map_links_[36482].recorded_energy_ice_.size()));
 
 	double timTrans = AKIGetDurationTransTime();
 	if (time < timTrans) // do not update cost in the warm up period
 		return 0;
 	// update link cost before rerouting
-	double prediction_horizon_in_s = network.prediction_horizon_ * 60;
+	double prediction_horizon_in_s = network->prediction_horizon_ * 60;
 	int moving_average_window_size = int(MOVING_AVERAGE_WINDOW / MOVING_AVERAGE_INTERVAL) + 1;
 	int predict_interval = int(prediction_horizon_in_s / MOVING_AVERAGE_INTERVAL);
 
 	// update link cost based on the historical data
-	for (auto& item : network.map_links_) {
+	for (auto& item : network->map_links_) {
 		int secid = item.first;
 		Link& current_link = item.second;
 
@@ -1006,11 +1009,11 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 		// get predictions using moving average, will have 6 item, each is travel time, ice, bev, phev1, phev2, hfcv
 		vector<double> predicted_values = current_link.predictMovingAverage(moving_average_window_size, predict_interval);
 		// these are the cost for all cavs
-		if (!network.eco_routing_with_travel_time_) {
-			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, predicted_values[1] * network.price_gas_);
-			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, predicted_values[2] * network.price_electricity_);
-			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, predicted_values[3] * network.price_gas_ + predicted_values[4] * network.price_electricity_);
-			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, predicted_values[5] * network.price_electricity_);
+		if (!network->eco_routing_with_travel_time_) {
+			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, predicted_values[1] * network->price_gas_);
+			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, predicted_values[2] * network->price_electricity_);
+			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, predicted_values[3] * network->price_gas_ + predicted_values[4] * network->price_electricity_);
+			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, predicted_values[5] * network->price_electricity_);
 		}
 		else {
 			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, predicted_values[0]);
