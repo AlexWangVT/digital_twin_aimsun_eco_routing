@@ -299,6 +299,16 @@ public:
 		electricity_used_per_vehicle_type_.clear();
 		vehicle_cnt_per_vehicle_type_.clear();
 
+		// statistics for the second hour
+		map_vehicles_second_hour_.clear();
+		overall_travel_time_second_hour_ = 0;
+		overall_fuel_consumed_second_hour_ = 0;
+		overall_electricity_used_second_hour_ = 0;
+		travel_time_second_hour_per_vehicle_type_.clear();
+		fuel_consumed_second_hour_per_vehicle_type_.clear();
+		electricity_used_second_hour_per_vehicle_type_.clear();
+		vehicle_cnt_second_hour_per_vehicle_type_.clear();
+
 		price_gas_ = PRICE_GAS;		// define gas price here
 		price_electricity_ = PRICE_ELECTRICITY; // define electric price here
 
