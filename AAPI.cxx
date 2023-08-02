@@ -309,6 +309,8 @@ public:
 		electricity_used_second_hour_per_vehicle_type_.clear();
 		vehicle_cnt_second_hour_per_vehicle_type_.clear();
 
+		number_of_vehicles_left_in_the_network_ = 0;
+
 		price_gas_ = PRICE_GAS;		// define gas price here
 		price_electricity_ = PRICE_ELECTRICITY; // define electric price here
 
@@ -350,6 +352,7 @@ public:
 			<< "Overall_Fuel_Cost_," << overall_fuel_consumed_ * price_gas_ << ",dollars\n"
 			<< "Overall_Electricity_Cost_," << overall_electricity_used_ * price_electricity_ << ",dollars\n"
 			<< "Total_Number_of_Vehicles," << N_vehicles_ << "\n"
+			<< "Number_of_vehicles_left_in_the_network," << number_of_vehicles_left_in_the_network_ << "\n"
 			<< "Vehicle_Type,ICE,ICE_NONCAV,BEV,BEV_NONCAV,PHEV,PHEV_NONCAN,HFCV,HFCV_NONCAV\n";
 
 		fout << "Travel_Time_VT_Avg";
@@ -412,6 +415,7 @@ public:
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
+		fout << "," << number_of_vehicles_left_in_the_network_;
 		fout << endl;
 		fout.close();
 	}
@@ -543,6 +547,8 @@ public:
 	unordered_map<VehicleType, double> fuel_consumed_second_hour_per_vehicle_type_;
 	unordered_map<VehicleType, double> electricity_used_second_hour_per_vehicle_type_;
 	unordered_map<VehicleType, int> vehicle_cnt_second_hour_per_vehicle_type_;
+
+	int number_of_vehicles_left_in_the_network_;
 
 	int experiment_id_;
 	double demand_percentage_;	// %
@@ -970,6 +976,16 @@ int AAPIFinish()
 		printDebugLog("Simulation is not finished, no output files.");
 		return 0;
 	}
+
+	// check how many vehicles are left in the network, if has extra off-peak / evacuation hour, large number might indicate simulation error
+	int number_of_vehicles_left_in_the_network = 0;
+	for (auto& item : network->map_links_) {
+		int secid = item.first;
+		int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+		if (nbveh > 0)
+			number_of_vehicles_left_in_the_network += nbveh;
+	}
+	network->number_of_vehicles_left_in_the_network_ = number_of_vehicles_left_in_the_network;
 
 	printDebugLog("Statistic will be output to the logs directory");
 	network->saveLogs();			// save simulation statistics in the \logs dir
