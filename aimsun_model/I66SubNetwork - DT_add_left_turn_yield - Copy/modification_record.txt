@@ -12,3 +12,9 @@ node 391831, add yield to all left turns
 node 391852, add yield to all left turns
 node 391530, add yield to all left turns
 node 391498, add yield to all left turns
+node 223894, add yield to left turn 223900
+node 391686, add yield to left turn 391689
+node 391650, add yield to all left turns
+node 391623, add yield to left turn 391626 & 391628
+node 391984, add yield to left turn 391993
+node 391745, add yield to all left turns
