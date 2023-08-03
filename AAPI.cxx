@@ -322,6 +322,7 @@ public:
 		prediction_horizon_ = 5;	// min
 		cav_penetration_ = 100;		// %
 		eco_routing_with_travel_time_ = false;
+		vehicle_fleet_ = "";
 	}
 
 	void saveLogs() {
@@ -346,6 +347,7 @@ public:
 			<< "Prediction_Horizon," << prediction_horizon_ << ",min\n"
 			<< "CAV_Penetration," << cav_penetration_ << ",%\n"
 			<< "Eco_Routing_with_Travel_Time," << eco_routing_with_travel_time_ << "\n"
+			<< "vehicle_fleet," << vehicle_fleet_ << "\n"
 			<< "Overall_Travel_Time_Avg," << overall_travel_time_ / N_vehicles_ << ",s\n"
 			<< "Overall_Fuel_Used_," << overall_fuel_consumed_ << ",gallon\n"
 			<< "Overall_Electricity_Used_," << overall_electricity_used_ << ",kWh\n"
@@ -385,16 +387,15 @@ public:
 		fout << endl;
 		fout << "Vehicle_Count_VT"; 
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
-		fout << endl;
-		fout.close();
-
-		// write to the summary file
-		fout.open(PROJECT_DIR + "\\" + summary_log_relative_path_, ios::out | ios::app);
+		fout << "\n\n\n\n";
+		
+		// write the summary line
 		fout << time_now
 			<< "," << demand_percentage_
 			<< "," << prediction_horizon_
 			<< "," << cav_penetration_
 			<< "," << eco_routing_with_travel_time_
+			<< "," << vehicle_fleet_
 			<< "," << overall_travel_time_ / N_vehicles_
 			<< "," << overall_fuel_consumed_
 			<< "," << overall_electricity_used_
@@ -416,6 +417,39 @@ public:
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
 		fout << "," << number_of_vehicles_left_in_the_network_;
+		fout << endl;
+		fout.close();
+
+		// write to the summary file
+		fout.open(PROJECT_DIR + "\\" + summary_log_relative_path_, ios::out | ios::app);
+		fout << time_now
+			<< "," << demand_percentage_
+			<< "," << prediction_horizon_
+			<< "," << cav_penetration_
+			<< "," << eco_routing_with_travel_time_
+			<< "," << vehicle_fleet_
+			<< "," << overall_travel_time_ / N_vehicles_
+			<< "," << overall_fuel_consumed_
+			<< "," << overall_electricity_used_
+			<< "," << overall_fuel_consumed_ * price_gas_
+			<< "," << overall_electricity_used_ * price_electricity_
+			<< "," << N_vehicles_;
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_per_vehicle_type_[vt];
+		// for the second hour
+		fout << "," << overall_fuel_consumed_second_hour_
+			<< "," << overall_electricity_used_second_hour_
+			<< "," << overall_fuel_consumed_second_hour_ * price_gas_
+			<< "," << overall_electricity_used_second_hour_ * price_electricity_
+			<< "," << N_vehicles_second_hour_;
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (travel_time_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (fuel_consumed_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
+		fout << "," << number_of_vehicles_left_in_the_network_;
+
 		fout << endl;
 		fout.close();
 	}
@@ -555,6 +589,7 @@ public:
 	double prediction_horizon_;	// min
 	double cav_penetration_;	// %
 	bool eco_routing_with_travel_time_;
+	string vehicle_fleet_;
 };
 Network* network;
 
@@ -565,11 +600,6 @@ void* link_attribute_ice;
 void* link_attribute_bev;
 void* link_attribute_phev;
 void* link_attribute_hfcv;
-
-int N_link, N_turn, N_type, N_step;
-ifstream flink, fturn;
-double** lnk_flow, ** trn_per;
-static double _null_energy_varibale = 0;
 
 
 void printDebugLog(string s) {
@@ -665,6 +695,11 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// this will assume the battery state-of-charge is always greater than the minimum range
 		// first calculate battery power
 		m = 1860, Af = 2.1851, cd = 0.29;
+
+		//// for test only
+		//// 2015 Nissan Leaf, from fiori2016power paper
+		//m = 1521.0, Af = 2.3316, cd = 0.28;
+
 		a0 = 0.00035218, a1 = 0.000032141, a2 = 0.000001;
 		P_max = 111;		// max electric motor power, in the unit of kW
 		grade_cos = sqrt(1 / (1 + pow(grade, 2)));
@@ -721,6 +756,11 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// HFCV energy model
 		// 2017 Toyota Mirai, from ahn2022developing paper
 		m = 1928.0, Af = 2.3316, cd = 0.28;
+		
+		//// for test only
+		//// 2015 Nissan Leaf, from fiori2016power paper
+		//m = 1521.0, Af = 2.3316, cd = 0.28;
+
 		grade_cos = sqrt(1.0 / (1.0 + pow(grade, 2)));
 		grade_sin = sqrt(1.0 - pow(grade_cos, 2));
 		if (grade < 0)
@@ -830,11 +870,15 @@ int AAPIInit()
 	void* attribute_prediction = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::prediction_horizon"));
 	void* attribute_cav_penetration = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
 	void* attribute_eco_routing_with_travel_time = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::eco_routing_with_travel_time"));
+	void* attribute_vehicle_fleet = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::vehicle_fleet"));
 	network->experiment_id_ = ANGConnGetExperimentId();
 	network->demand_percentage_ = ANGConnGetAttributeValueDouble(attribute_demand, network->experiment_id_);
 	network->prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network->experiment_id_);
 	network->cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network->experiment_id_);
-	network->eco_routing_with_travel_time_ = ANGConnGetAttributeValueBool(attribute_eco_routing_with_travel_time, network->experiment_id_);
+	bool anyNonAsciiChar;
+	network->vehicle_fleet_ = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(attribute_vehicle_fleet, network->experiment_id_), false, &anyNonAsciiChar));
+	//network->vehicle_fleet_ = ANGConnGetAttributeValueInt(attribute_vehicle_fleet, network->experiment_id_);
+
 	SIM_STEP = AKIGetSimulationStepTime();
 	network->N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
 	printDebugLog("Total number of links is : " + to_string(network->N_links_));
