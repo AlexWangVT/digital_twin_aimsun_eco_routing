@@ -875,6 +875,7 @@ int AAPIInit()
 	network->demand_percentage_ = ANGConnGetAttributeValueDouble(attribute_demand, network->experiment_id_);
 	network->prediction_horizon_ = ANGConnGetAttributeValueDouble(attribute_prediction, network->experiment_id_);
 	network->cav_penetration_ = ANGConnGetAttributeValueDouble(attribute_cav_penetration, network->experiment_id_);
+	network->eco_routing_with_travel_time_ = ANGConnGetAttributeValueBool(attribute_eco_routing_with_travel_time, network->experiment_id_);
 	bool anyNonAsciiChar;
 	network->vehicle_fleet_ = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(attribute_vehicle_fleet, network->experiment_id_), false, &anyNonAsciiChar));
 	//network->vehicle_fleet_ = ANGConnGetAttributeValueInt(attribute_vehicle_fleet, network->experiment_id_);
