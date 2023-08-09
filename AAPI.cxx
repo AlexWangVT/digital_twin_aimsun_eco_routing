@@ -153,11 +153,13 @@ public:
 		dummy_vehicle.link_travel_time_ += travel_time;
 
 		dummy_vehicle.energy1_consumed_accumulated_ += energy1 * travel_time;
-		dummy_vehicle.energy2_consumed_accumulated_ += energy2 * travel_time / 3600.0;
+		dummy_vehicle.energy2_consumed_accumulated_ += energy2 * travel_time;
+
 	}
 
 	void pushBackRecordedData() {
 		// calculate vehicle-wise average
+
 		for (auto& item : map_dummy_vehicles_) {
 			Vehicle& vehicle = item.second;
 			VehicleType& vt = vehicle.vehicle_type_;
@@ -175,7 +177,7 @@ public:
 			case VehicleType::BEV:
 			case VehicleType::BEV_NONCAV:
 				energy_bev_ += energy2;
-				cnt_bev_++;
+				cnt_bev_++;			
 				break;
 			case VehicleType::PHEV:
 			case VehicleType::PHEV_NONCAV:
@@ -194,7 +196,6 @@ public:
 			travel_time_ += vehicle.link_travel_time_ / vehicle.update_count_;	// in the unit of seconds
 			cnt_time_++;
 		}
-
 		// average all vehicles as the link cost
 		if (cnt_time_ == 0)
 			recorded_travel_time_.push_back(base_travel_time_);
@@ -880,6 +881,7 @@ int AAPIInit()
 	network->vehicle_fleet_ = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(attribute_vehicle_fleet, network->experiment_id_), false, &anyNonAsciiChar));
 	//network->vehicle_fleet_ = ANGConnGetAttributeValueInt(attribute_vehicle_fleet, network->experiment_id_);
 
+	double total_link_length = 0;
 	SIM_STEP = AKIGetSimulationStepTime();
 	network->N_links_ = AKIInfNetNbSectionsANG(); // obtain the number of links in the network
 	printDebugLog("Total number of links is : " + to_string(network->N_links_));
@@ -892,6 +894,7 @@ int AAPIInit()
 		A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
 		double spd = secinf.speedLimit / 3.6;
 		double grade = secinf.slopePercentages[0] / 100.0;
+		total_link_length += secinf.length;
 
 		Emission(spd, grade, 0.0, network->map_links_[secid].base_energy_ice_, network->map_links_[secid].base_energy_bev_, network->map_links_[secid].base_energy_phev1_,
 			network->map_links_[secid].base_energy_phev2_, network->map_links_[secid].base_energy_hfcv_);
@@ -922,6 +925,8 @@ int AAPIInit()
 	// deprecated - historical data method
 	//if (!GENERATE_HISTORICAL_DATA)
 	//	network->loadHistoricalData();
+
+	printDebugLog("Total lenght of all links is : " + to_string(total_link_length) + " meters.");
 
 	return 0;
 }
