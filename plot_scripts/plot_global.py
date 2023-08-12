@@ -1,8 +1,8 @@
 import pandas as pd
 
-df1 = pd.read_csv('../sim_logs/summary_demand100.csv')
-df2 = pd.read_csv('../sim_logs/summary_demand150.csv')
-df3 = pd.read_csv('../sim_logs/summary_demand50.csv')
+df1 = pd.read_csv('../sim_logs/backups/batch_summary/20230809/summary_demand100.csv')
+df2 = pd.read_csv('../sim_logs/backups/batch_summary/20230809/summary_demand150.csv')
+df3 = pd.read_csv('../sim_logs/backups/batch_summary/20230809/summary_demand50.csv')
 
 df = pd.concat([df1,df2,df3], ignore_index=True)
 # print(df.shape)

@@ -68,6 +68,10 @@ public:
 		trave_time_accumulated_ = 0;
 		energy1_consumed_accumulated_ = 0;
 		energy2_consumed_accumulated_ = 0;
+		distance_start_ = 0;
+		distance_end_ = 0;
+		mpg_ = 0;
+		mpge_ = 0;
 		link_travel_time_ = 0;
 		update_count_ = 0;
 	}
@@ -86,11 +90,20 @@ public:
 		}
 	}
 
+	void updateMPGorMPGe() {
+		mpg_ = ((energy1_consumed_accumulated_ == 0) ? 0 : ((distance_end_ - distance_start_) / 1609.34 / energy1_consumed_accumulated_));
+		mpge_ = ((energy2_consumed_accumulated_ == 0) ? 0 : ((distance_end_ - distance_start_) / 1609.34 / energy2_consumed_accumulated_) * 33.7);
+	}
+
 	int id_;
 	VehicleType vehicle_type_;
 	double trave_time_accumulated_;
 	double energy1_consumed_accumulated_;
 	double energy2_consumed_accumulated_;
+	double distance_start_;
+	double distance_end_;
+	double mpg_;
+	double mpge_;
 	double soc_;				// only used for PHEV to store fuel usage
 	double battery_capacity_;	// only used for PHEV to store fuel usage
 	double link_travel_time_;	// for dummy vehicle and moving average
@@ -292,6 +305,8 @@ public:
 		overall_travel_time_ = 0;
 		overall_fuel_consumed_ = 0;
 		overall_electricity_used_ = 0;
+		overall_mpg_ = 0;
+		overall_mpge_ = 0;
 		N_links_ = 0;
 		N_vehicles_ = 0;
 		N_vehicle_types_ = 8;
@@ -299,6 +314,8 @@ public:
 		fuel_consumed_per_vehicle_type_.clear();
 		electricity_used_per_vehicle_type_.clear();
 		vehicle_cnt_per_vehicle_type_.clear();
+		mpg_per_vehicle_type_.clear();
+		mpge_per_vehicle_type_.clear();
 
 		// statistics for the second hour
 		map_vehicles_second_hour_.clear();
@@ -418,6 +435,9 @@ public:
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
 		fout << "," << number_of_vehicles_left_in_the_network_;
+		// mpg and mpge for the whole trip
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (mpg_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (mpge_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout.close();
 
@@ -450,7 +470,9 @@ public:
 		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_second_hour_per_vehicle_type_[vt] == 0) ? 0 : (electricity_used_second_hour_per_vehicle_type_[vt] / vehicle_cnt_second_hour_per_vehicle_type_[vt]));
 		for (auto& vt : valid_vehicle_type_list) fout << "," << vehicle_cnt_second_hour_per_vehicle_type_[vt];
 		fout << "," << number_of_vehicles_left_in_the_network_;
-
+		// mpg and mpge for the whole trip
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (mpg_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
+		for (auto& vt : valid_vehicle_type_list) fout << "," << ((vehicle_cnt_per_vehicle_type_[vt] == 0) ? 0 : (mpge_per_vehicle_type_[vt] / vehicle_cnt_per_vehicle_type_[vt]));
 		fout << endl;
 		fout.close();
 	}
@@ -561,10 +583,15 @@ public:
 	double overall_travel_time_;
 	double overall_fuel_consumed_;
 	double overall_electricity_used_;
+	double overall_mpg_;
+	double overall_mpge_;
 	unordered_map<VehicleType, double> travel_time_per_vehicle_type_;
 	unordered_map<VehicleType, double> fuel_consumed_per_vehicle_type_;
 	unordered_map<VehicleType, double> electricity_used_per_vehicle_type_;
 	unordered_map<VehicleType, int> vehicle_cnt_per_vehicle_type_;
+	unordered_map<VehicleType, double> mpg_per_vehicle_type_;
+	unordered_map<VehicleType, double> mpge_per_vehicle_type_;
+
 	int N_links_;
 	int N_vehicles_;
 	int N_vehicle_types_;	// only count self-defined vehicle type
@@ -636,6 +663,9 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 	double va = 32;                                     // for FHCV, in the unit of km/h
 	double Pa = 2.5, Pb = 5, P_aux = 0.0, P_idle = 0.0; // for FHCV, in the unit of kW
 
+	// test only, TODO: delete or commit this change
+	P_aux = 1.0;
+
 	double grade_sin, grade_cos;
 	double resistance;
 	double P_ice, P_w, P_batt, P_fuel;
@@ -673,6 +703,12 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// To be consistant on the wheel power model, use the model in HFCV model
 		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000.0;			// now P_W is in the unit of kW
+		
+		// test only, TODO: delete or commit this change
+		if (spd_in_km_per_h == 0) {
+			P_w = P_aux;
+		}
+
 		if (P_w >= 0)
 		{
 			energy2 = P_w / (eta_dl * eta_em); // in the unit of kW
@@ -711,6 +747,11 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// To be consistant on the wheel power model, use the model in HFCV model
 		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000;				// now P_W is in the unit of kW
+
+		// test only, TODO: delete or commit this change
+		if (spd_in_km_per_h == 0) {
+			P_w = P_aux;
+		}
 
 		if (P_w >= 0)
 		{
@@ -971,6 +1012,9 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				if (network->map_vehicles_.count(vehicle_id) < 1) {
 					network->map_vehicles_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
 					network->vehicle_cnt_per_vehicle_type_[vehicle_type]++;
+					// init start distance
+					Vehicle& cur_vehicle = network->map_vehicles_[vehicle_id];
+					cur_vehicle.distance_start_ = vehinf.TotalDistance;
 				}
 				Vehicle& cur_vehicle = network->map_vehicles_[vehicle_id];
 				cur_vehicle.updateEnergy(energy1, energy2, SIM_STEP);
@@ -980,12 +1024,16 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				network->electricity_used_per_vehicle_type_[vehicle_type] += energy2;
 				network->overall_travel_time_ += SIM_STEP;
 				network->travel_time_per_vehicle_type_[vehicle_type] += SIM_STEP;
+				cur_vehicle.distance_end_ = vehinf.TotalDistance;
 			}			
 			// update(report) the total energy consumption for different types of vehicles after the first hour
 			if (time - timTrans > 3600) {
 				if (network->map_vehicles_second_hour_.count(vehicle_id) < 1) {
 					network->map_vehicles_second_hour_[vehicle_id] = Vehicle(vehicle_id, vehicle_type);
 					network->vehicle_cnt_second_hour_per_vehicle_type_[vehicle_type]++;
+					// init start distance
+					Vehicle& cur_vehicle = network->map_vehicles_second_hour_[vehicle_id];
+					cur_vehicle.distance_start_ = vehinf.TotalDistance;
 				}
 				Vehicle& cur_vehicle = network->map_vehicles_second_hour_[vehicle_id];
 				cur_vehicle.updateEnergy(energy1, energy2, SIM_STEP);
@@ -995,6 +1043,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double acicle)
 				network->electricity_used_second_hour_per_vehicle_type_[vehicle_type] += energy2;
 				network->overall_travel_time_second_hour_ += SIM_STEP;
 				network->travel_time_second_hour_per_vehicle_type_[vehicle_type] += SIM_STEP;
+				cur_vehicle.distance_end_ = vehinf.TotalDistance;
 			}
 		}
 
@@ -1036,6 +1085,22 @@ int AAPIFinish()
 			number_of_vehicles_left_in_the_network += nbveh;
 	}
 	network->number_of_vehicles_left_in_the_network_ = number_of_vehicles_left_in_the_network;
+
+	// update end distance for each vehicle and calculate MPG and MPGe (miles per 33.7kWh)
+	for (auto& vt : valid_vehicle_type_list) {
+		network->mpg_per_vehicle_type_[vt] = 0;
+		network->mpge_per_vehicle_type_[vt] = 0;
+	}
+	for (auto& item : network->map_vehicles_) {
+		Vehicle& current_vehicle = item.second;
+		VehicleType& vehicle_type = current_vehicle.vehicle_type_;
+		current_vehicle.updateMPGorMPGe();
+		network->overall_mpg_ += current_vehicle.mpg_;
+		network->overall_mpge_ += current_vehicle.mpge_;
+		network->mpg_per_vehicle_type_[vehicle_type] += current_vehicle.mpg_;
+		network->mpge_per_vehicle_type_[vehicle_type] += current_vehicle.mpge_;
+	}
+
 
 	printDebugLog("Statistic will be output to the logs directory");
 	network->saveLogs();			// save simulation statistics in the \logs dir
