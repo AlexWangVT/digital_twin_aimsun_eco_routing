@@ -12,8 +12,8 @@ def plotAllTypes(vehicle_fleet='2030',
                  prediction_horizon=5,
                  save_fig=False):
 
-    linewidths = [2, 2.5, 2.8, 2]
-    linestyles = ['solid', 'dashed', 'dotted', 'dashdot']
+    linewidths = [2, 2.5, 2.2, 2]
+    linestyles = ['solid', 'dashed', 'dashdot', 'dashdot']
 
     sns.set_theme(style='whitegrid', palette='bright')
     # sns.set_style("whitegrid")
@@ -24,34 +24,94 @@ def plotAllTypes(vehicle_fleet='2030',
                               & (statistics_df['Prediction_Horizon(min)'] == prediction_horizon)]
 
     g = sns.lineplot(x='CAV_Penetration(%)', y='ICE_Reduction',
-                     data=target_df, label='ICE_Reduction', linewidth=linewidths[0], linestyle=linestyles[0])
+                     data=target_df, label='ICE', linewidth=linewidths[0], linestyle=linestyles[0])
     if vehicle_fleet != 'ICE':
         g = sns.lineplot(x='CAV_Penetration(%)', y='BEV_Reduction',
-                         data=target_df, label='BEV_Reduction', linewidth=linewidths[1], linestyle=linestyles[1])
+                         data=target_df, label='BEV', linewidth=linewidths[1], linestyle=linestyles[1])
         g = sns.lineplot(x='CAV_Penetration(%)', y='PHEV_Reduction',
-                         data=target_df, label='PHEV_Reduction', linewidth=linewidths[2], linestyle=linestyles[2])
+                         data=target_df, label='PHEV', linewidth=linewidths[2], linestyle=linestyles[2])
         g = sns.lineplot(x='CAV_Penetration(%)', y='HFCV_Reduction',
-                         data=target_df, label='HFCV_Reduction', linewidth=linewidths[3], linestyle=linestyles[3])
-    if prediction_horizon == 0:
-        title = '{} Fleet: Demand {}% Real-time '.format(
-            vehicle_fleet, demand_percentage)
-    else:
-        title = '{} Fleet: Demand {}% Predict {}min '.format(
-            vehicle_fleet, demand_percentage, prediction_horizon)
-    if eco_routing_with_travel_time:
-        title += 'Travel time routing'
-    else:
-        title += 'Eco-routing'
+                         data=target_df, label='HFCV', linewidth=linewidths[3], linestyle=linestyles[3])
+    # if prediction_horizon == 0:
+    #     title = '{} Fleet: Demand {}% Real-time '.format(
+    #         vehicle_fleet, demand_percentage)
+    # else:
+    #     title = '{} Fleet: Demand {}% Predict {}min '.format(
+    #         vehicle_fleet, demand_percentage, prediction_horizon)
+    title = '{} Fleet - Energy Change'.format(vehicle_fleet)
+    # if eco_routing_with_travel_time:
+    #     title += 'Travel time routing'
+    # else:
+    #     title += 'Eco-routing'
     plt.ylim([-40, 40])
     plt.xlim([0, 100])
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
-    plt.ylabel("Energy Reduction (%)", fontsize=16)
+    plt.ylabel("Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
     plt.yticks(fontsize=14)
     plt.xticks(fontsize=14)
     plt.legend(fontsize=14)
     if save_fig:
         file_name = 'figures/{}_Demand_{}_Predict_{}'.format(
+            vehicle_fleet, demand_percentage, prediction_horizon)
+        if eco_routing_with_travel_time:
+            file_name += '_TravelTimeRouting.pdf'
+        else:
+            file_name += '_Ecorouting.pdf'
+        if os.path.isfile(file_name):
+            os.remove(file_name)
+        plt.savefig(file_name, bbox_inches='tight')  # , format='pdf')
+
+    plt.show(block=False)
+
+
+def plotTravelTimeAllTypes(vehicle_fleet='2030',
+                           demand_percentage=100,
+                           eco_routing_with_travel_time=0,
+                           prediction_horizon=5,
+                           save_fig=False):
+
+    linewidths = [2, 2.5, 2.2, 2]
+    linestyles = ['solid', 'dashed', 'dashdot', 'dashdot']
+
+    sns.set_theme(style='whitegrid', palette='bright')
+    # sns.set_style("whitegrid")
+    statistics_df = plot_global.statistics_df
+    target_df = statistics_df[(statistics_df['Vehicle_Fleet'] == vehicle_fleet)
+                              & (statistics_df['Demand_Percentage(%)'] == demand_percentage)
+                              & (statistics_df['Eco_Routing_with_Travel_Time(0/1)'] == eco_routing_with_travel_time)
+                              & (statistics_df['Prediction_Horizon(min)'] == prediction_horizon)]
+
+    g = sns.lineplot(x='CAV_Penetration(%)', y='ICE_TravelTime_Reduction',
+                     data=target_df, label='ICE', linewidth=linewidths[0], linestyle=linestyles[0])
+    if vehicle_fleet != 'ICE':
+        g = sns.lineplot(x='CAV_Penetration(%)', y='BEV_TravelTime_Reduction',
+                         data=target_df, label='BEV', linewidth=linewidths[1], linestyle=linestyles[1])
+        g = sns.lineplot(x='CAV_Penetration(%)', y='PHEV_TravelTime_Reduction',
+                         data=target_df, label='PHEV', linewidth=linewidths[2], linestyle=linestyles[2])
+        g = sns.lineplot(x='CAV_Penetration(%)', y='HFCV_TravelTime_Reduction',
+                         data=target_df, label='HFCV', linewidth=linewidths[3], linestyle=linestyles[3])
+    # if prediction_horizon == 0:
+    #     title = '{} Fleet: Demand {}% Real-time '.format(
+    #         vehicle_fleet, demand_percentage)
+    # else:
+    #     title = '{} Fleet: Demand {}% Predict {}min '.format(
+    #         vehicle_fleet, demand_percentage, prediction_horizon)
+    title = '{} Fleet - Travel Time Change'.format(vehicle_fleet)
+    # if eco_routing_with_travel_time:
+    #     title += 'Travel time routing'
+    # else:
+    #     title += 'Eco-routing'
+    plt.ylim([-40, 60])
+    plt.xlim([0, 100])
+    plt.title(title, fontweight='bold', fontsize=18, y=1.05)
+    plt.ylabel("Travel Time Change (%)", fontsize=16)
+    plt.xlabel("CAV Penetration (%)", fontsize=16)
+    plt.yticks(fontsize=14)
+    plt.xticks(fontsize=14)
+    plt.legend(fontsize=14)
+    if save_fig:
+        file_name = 'figures/TravelTime_{}_Demand_{}_Predict_{}'.format(
             vehicle_fleet, demand_percentage, prediction_horizon)
         if eco_routing_with_travel_time:
             file_name += '_TravelTimeRouting.pdf'
@@ -106,7 +166,7 @@ def plotComparisonEcoRouting(vehicle_type='ICE',
             vehicle_fleet, demand_percentage, prediction_horizon)
     title += vehicle_type
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
-    plt.ylabel("Energy Reduction (%)", fontsize=16)
+    plt.ylabel("Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
     plt.yticks(fontsize=14)
     plt.xticks(fontsize=14)
@@ -139,7 +199,7 @@ def plotOptimumCAV(
 
     title = 'Demand {}%'.format(demand_percentage)
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
-    plt.ylabel("Network Cost Reduction (%)", fontsize=16)
+    plt.ylabel("Overall Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
     plt.yticks(fontsize=14)
     plt.xticks(fontsize=14)
@@ -177,7 +237,7 @@ def plotCompareRouting(demand_percentage=100,
     else:
         title += ' Travel time routing'
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
-    plt.ylabel("Network Cost Reduction (%)", fontsize=16)
+    plt.ylabel("Overall Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
     plt.yticks(fontsize=14)
     plt.xticks(fontsize=14)
@@ -216,7 +276,7 @@ def plotComparePrediction(
     else:
         title = 'Predictive Routing {}min'.format(predict_horizon)
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
-    plt.ylabel("Network Cost Reduction (%)", fontsize=16)
+    plt.ylabel("Overall Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
     plt.yticks(fontsize=14)
     plt.xticks(fontsize=14)
@@ -235,8 +295,8 @@ def plotComparePrediction(
 
 
 def plotComparePredictHorizon(save_fig=False):
-    linewidths = [2, 2.5, 2.8, 2, 2]
-    linestyles = ['solid', 'dashed', 'dotted', 'dashdot', 'dotted']
+    linewidths = [2, 2.5, 2.2, 2, 2]
+    linestyles = ['solid', 'dashed', 'dashdot', 'dashdot', 'dotted']
     sns.set_theme(style='whitegrid', palette='bright')
 
     statistics_df = plot_global.statistics_df
@@ -263,7 +323,7 @@ def plotComparePredictHorizon(save_fig=False):
 
     title = 'Comparison on Prediction Horizon'
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
-    plt.ylabel("Energy Efficiency Improvement (%)", fontsize=16)
+    plt.ylabel("Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
     plt.yticks(fontsize=14)
     plt.xticks(fontsize=14)

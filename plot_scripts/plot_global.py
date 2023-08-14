@@ -15,6 +15,10 @@ statistics_df['BEV_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy
 statistics_df['PHEV_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
 statistics_df['HFCV_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
 statistics_df['Money_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
+statistics_df['ICE_TravelTime_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
+statistics_df['BEV_TravelTime_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
+statistics_df['PHEV_TravelTime_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
+statistics_df['HFCV_TravelTime_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
 for idx in statistics_df.index:
     base_df = statistics_df[(statistics_df['Vehicle_Fleet'] == statistics_df['Vehicle_Fleet'][idx]) 
              & (statistics_df['Demand_Percentage(%)'] == statistics_df['Demand_Percentage(%)'][idx]) 
@@ -28,6 +32,11 @@ for idx in statistics_df.index:
     base_phev = base_df['Electricity_Used_PHEV_NONCAV_Avg(kWh)'].values[0]
     base_hfcv = base_df['Electricity_Used_HFCV_NONCAV_Avg(kWh)'].values[0]
     base_money = base_df['Overall_Fuel_Cost($)'].values[0] + base_df['Overall_Electricity_Cost($)'].values[0] 
+    
+    base_traveltime_ice = base_df['Travel_Time_ICE_NONCAV_Avg(s)'].values[0]
+    base_traveltime_bev = base_df['Travel_Time_BEV_NONCAV_Avg(s)'].values[0]
+    base_traveltime_phev = base_df['Travel_Time_PHEV_NONCAV_Avg(s)'].values[0]
+    base_traveltime_hfcv = base_df['Travel_Time_HFCV_NONCAV_Avg(s)'].values[0]
     
     statistics_df['Overall_Fuel_Reduction'][idx] = (statistics_df['Overall_Fuel_Used(gallon)'][idx] - base_overall_fuel) / base_overall_fuel * 100.0
     statistics_df['Overall_Electricity_Reduction'][idx] = (statistics_df['Overall_Electricity_Used(kWh)'][idx] - base_overall_electricity) / base_overall_electricity * 100.0
@@ -51,3 +60,20 @@ for idx in statistics_df.index:
     else:
         statistics_df['HFCV_Reduction'][idx] = 0.0
     statistics_df['Money_Reduction'][idx] = (statistics_df['Overall_Fuel_Cost($)'][idx] + statistics_df['Overall_Electricity_Cost($)'][idx] - base_money ) / base_money * 100.0
+    
+    if statistics_df['Travel_Time_ICE_Avg(s)'][idx] > 0:
+        statistics_df['ICE_TravelTime_Reduction'][idx] = (statistics_df['Travel_Time_ICE_Avg(s)'][idx] - base_traveltime_ice) / base_traveltime_ice * 100.0
+    else:
+        statistics_df['ICE_TravelTime_Reduction'][idx] = 0.0
+    if statistics_df['Travel_Time_BEV_Avg(s)'][idx] > 0:
+        statistics_df['BEV_TravelTime_Reduction'][idx] = (statistics_df['Travel_Time_BEV_Avg(s)'][idx] - base_traveltime_bev) / base_traveltime_bev * 100.0
+    else:
+        statistics_df['BEV_TravelTime_Reduction'][idx] = 0.0
+    if statistics_df['Travel_Time_PHEV_Avg(s)'][idx] > 0:
+        statistics_df['PHEV_TravelTime_Reduction'][idx] = (statistics_df['Travel_Time_PHEV_Avg(s)'][idx] - base_traveltime_phev) / base_traveltime_phev * 100.0
+    else:
+        statistics_df['PHEV_TravelTime_Reduction'][idx] = 0.0
+    if statistics_df['Travel_Time_HFCV_Avg(s)'][idx] > 0:
+        statistics_df['HFCV_TravelTime_Reduction'][idx] = (statistics_df['Travel_Time_HFCV_Avg(s)'][idx] - base_traveltime_hfcv) / base_traveltime_hfcv * 100.0
+    else:
+        statistics_df['HFCV_TravelTime_Reduction'][idx] = 0.0
