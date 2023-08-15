@@ -345,4 +345,4 @@ if __name__ == '__main__':
     eco_routing_with_travel_time = 0
     prediction_horizon = 5
     plotAllTypes(vehicle_fleet, demand_percentage,
-                 eco_routing_with_travel_time, prediction_horizon, save_fig=True)
+                 eco_routing_with_travel_time, prediction_horizon, save_fig=False)
