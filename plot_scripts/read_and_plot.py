@@ -33,10 +33,10 @@ def plotAllTypes(vehicle_fleet='2030',
         g = sns.lineplot(x='CAV_Penetration(%)', y='HFCV_Reduction',
                          data=target_df, label='HFCV', linewidth=linewidths[3], linestyle=linestyles[3])
     # if prediction_horizon == 0:
-    #     title = '{} Fleet: Demand {}% Real-time '.format(
+    #     title = '{} Fleet: {}% Demand Real-time '.format(
     #         vehicle_fleet, demand_percentage)
     # else:
-    #     title = '{} Fleet: Demand {}% Predict {}min '.format(
+    #     title = '{} Fleet: {}% Demand Predict {}min '.format(
     #         vehicle_fleet, demand_percentage, prediction_horizon)
     title = '{} Fleet - Energy Change'.format(vehicle_fleet)
     # if eco_routing_with_travel_time:
@@ -92,10 +92,10 @@ def plotTravelTimeAllTypes(vehicle_fleet='2030',
         g = sns.lineplot(x='CAV_Penetration(%)', y='HFCV_TravelTime_Reduction',
                          data=target_df, label='HFCV', linewidth=linewidths[3], linestyle=linestyles[3])
     # if prediction_horizon == 0:
-    #     title = '{} Fleet: Demand {}% Real-time '.format(
+    #     title = '{} Fleet: {}% Demand Real-time '.format(
     #         vehicle_fleet, demand_percentage)
     # else:
-    #     title = '{} Fleet: Demand {}% Predict {}min '.format(
+    #     title = '{} Fleet: {}% Demand Predict {}min '.format(
     #         vehicle_fleet, demand_percentage, prediction_horizon)
     title = '{} Fleet - Travel Time Change'.format(vehicle_fleet)
     # if eco_routing_with_travel_time:
@@ -159,10 +159,10 @@ def plotComparisonEcoRouting(vehicle_type='ICE',
                      data=target_df_travel_time_routing, label=vehicle_type+'_Travel time routing', linewidth=2.5, linestyle='dashed', color=vehicle_type_color)
 
     if prediction_horizon == 0:
-        title = '{} Fleet: Demand {}% Real-time '.format(
+        title = '{} Fleet: {}% Demand Real-time '.format(
             vehicle_fleet, demand_percentage)
     else:
-        title = '{} Fleet: Demand {}% Predict {}min '.format(
+        title = '{} Fleet: {}% Demand Predict {}min '.format(
             vehicle_fleet, demand_percentage, prediction_horizon)
     title += vehicle_type
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
@@ -197,7 +197,7 @@ def plotOptimumCAV(
     g = sns.scatterplot(data=target_df, x="CAV_Penetration(%)",
                         y="Money_Reduction", hue='Prediction_Horizon(min)')
 
-    title = 'Demand {}%'.format(demand_percentage)
+    title = '{}% Demand'.format(demand_percentage)
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
     plt.ylabel("Overall Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
@@ -231,7 +231,7 @@ def plotCompareRouting(demand_percentage=100,
     g = sns.scatterplot(data=target_df, x="CAV_Penetration(%)",
                         y="Money_Reduction", hue='Prediction_Horizon(min)')
 
-    title = 'Demand {}%'.format(demand_percentage)
+    title = '{}% Demand:'.format(demand_percentage)
     if eco_routing_with_travel_time == 0:
         title += ' Eco-routing'
     else:

@@ -477,6 +477,7 @@ public:
 		fout.close();
 	}
 
+	// deprecated - historical data method
 	void saveHistoricalData() {
 		string history_file_name = PROJECT_DIR + "\\" + history_file_replative_path_;
 		printDebugLog("Will write historical data to this file: " + history_file_name);
@@ -505,6 +506,7 @@ public:
 		}
 	}
 
+	// deprecated - historical data method
 	void loadHistoricalData() {
 
 		for (auto& item : map_links_) {
