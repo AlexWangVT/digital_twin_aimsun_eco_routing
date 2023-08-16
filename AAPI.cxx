@@ -156,6 +156,9 @@ public:
 	}
 
 	void addOneDataPoint(int id, VehicleType vt, double energy1, double energy2, double travel_time) {
+		// used for moving average
+		// will be called in every simulation step to record vehicles' energy consumptions within one moving average interval
+		// all recorded dummy_vehicle data will be (and need to be) cleared to prepare for the next interval
 
 		if (map_dummy_vehicles_.count(id) < 1) {
 			map_dummy_vehicles_[id] = Vehicle(id, vt);
@@ -172,6 +175,7 @@ public:
 
 	void pushBackRecordedData() {
 		// calculate vehicle-wise average
+		// and record the average data into local vectors
 
 		for (auto& item : map_dummy_vehicles_) {
 			Vehicle& vehicle = item.second;
@@ -237,6 +241,9 @@ public:
 	}
 
 	vector<double> predictMovingAverage(int mv_window, int predict_interval) {
+		// predict based on the window size and the target future index
+		// will return the prediction for travel time, ice, bev, phev1 (this is for gas), phev2 (this is for electricity) and hfcv
+
 		vector<double> predicted_values(6, 0);
 
 		vector<double> record_travel_time(recorded_travel_time_.end() - mv_window, recorded_travel_time_.end());
@@ -256,6 +263,8 @@ public:
 	}
 
 	double predictFuture(vector<double>& record_vector, int future_idx) {
+		// predict future based on the recorded vector and moving average algorithm
+
 		int n = record_vector.size();
 		while (record_vector.size() < future_idx + 1) {
 			double sum = 0;
@@ -265,13 +274,6 @@ public:
 			record_vector.push_back(sum / n);
 		}
 		return record_vector[future_idx];
-	}
-
-	void printDetail() { // only used for debug
-		printDebugLog("Section id is : " + to_string(id_));
-		printDebugLog("The size of recorded ice energy is : " + to_string(recorded_energy_ice_.size()));
-		//for (auto& v : recorded_energy_ice_)
-		//	printDebugLog(to_string(v));
 	}
 
 	int id_;
@@ -344,6 +346,8 @@ public:
 	}
 
 	void saveLogs() {
+		// save all logs into the summary file
+		// this function will only be called if the simulation finishes without error or manually stopping
 
 		auto t = time(nullptr);
 		auto tm = *localtime(&t);
@@ -1106,10 +1110,6 @@ int AAPIFinish()
 
 	printDebugLog("Statistic will be output to the logs directory");
 	network->saveLogs();			// save simulation statistics in the \logs dir
-
-	// deprecated - historical data method
-	//if (GENERATE_HISTORICAL_DATA)
-	//	network->saveHistoricalData();	// save historical data to the file
 
 	delete network;
 

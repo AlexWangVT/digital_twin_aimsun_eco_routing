@@ -11,6 +11,7 @@ def plotAllTypes(vehicle_fleet='2030',
                  eco_routing_with_travel_time=0,
                  prediction_horizon=5,
                  save_fig=False):
+    # Compare on different powertrain
 
     linewidths = [2, 2.5, 2.2, 2]
     linestyles = ['solid', 'dashed', 'dashdot', 'dashdot']
@@ -70,6 +71,7 @@ def plotTravelTimeAllTypes(vehicle_fleet='2030',
                            eco_routing_with_travel_time=0,
                            prediction_horizon=5,
                            save_fig=False):
+    # Compare on travel time routings
 
     linewidths = [2, 2.5, 2.2, 2]
     linestyles = ['solid', 'dashed', 'dashdot', 'dashdot']
@@ -129,6 +131,8 @@ def plotComparisonEcoRouting(vehicle_type='ICE',
                              demand_percentage=100,
                              prediction_horizon=5,
                              save_fig=False):
+    # compare eco-routing and travel time routing
+
     eco_routing_with_travel_time = 0
     linewidths = [2, 2.5, 2.8, 2]
     linestyles = ['solid', 'dashed', 'dotted', 'dashdot']
@@ -187,6 +191,7 @@ def plotComparisonEcoRouting(vehicle_type='ICE',
 def plotOptimumCAV(
         demand_percentage=100,
         save_fig=False):
+    # compare different demands
 
     sns.set_theme(style='whitegrid', palette='bright')
     statistics_df = plot_global.statistics_df
@@ -220,6 +225,8 @@ def plotOptimumCAV(
 def plotCompareRouting(demand_percentage=100,
                        eco_routing_with_travel_time=0,
                        save_fig=False):
+    # compare different demands and routing strategies
+
     sns.set_theme(style='whitegrid', palette='bright')
     statistics_df = plot_global.statistics_df
     target_df = statistics_df[(statistics_df['Demand_Percentage(%)'] == demand_percentage)
@@ -235,7 +242,7 @@ def plotCompareRouting(demand_percentage=100,
     if eco_routing_with_travel_time == 0:
         title += ' Eco-routing'
     else:
-        title += ' Travel time routing'
+        title += ' Travel Time Routing'
     plt.title(title, fontweight='bold', fontsize=18, y=1.05)
     plt.ylabel("Overall Energy Change (%)", fontsize=16)
     plt.xlabel("CAV Penetration (%)", fontsize=16)
@@ -262,6 +269,8 @@ def plotCompareRouting(demand_percentage=100,
 def plotComparePrediction(
         predict_horizon=0,
         save_fig=False):
+    # compare different prediction horizon
+
     sns.set_theme(style='whitegrid', palette='bright')
     statistics_df = plot_global.statistics_df
     target_df = statistics_df[(
@@ -295,6 +304,8 @@ def plotComparePrediction(
 
 
 def plotComparePredictHorizon(save_fig=False):
+    # compare different prediction horizon
+
     linewidths = [2, 2.5, 2.2, 2, 2]
     linestyles = ['solid', 'dashed', 'dashdot', 'dashdot', 'dotted']
     sns.set_theme(style='whitegrid', palette='bright')
@@ -344,5 +355,3 @@ if __name__ == '__main__':
     demand_percentage = 100
     eco_routing_with_travel_time = 0
     prediction_horizon = 5
-    plotAllTypes(vehicle_fleet, demand_percentage,
-                 eco_routing_with_travel_time, prediction_horizon, save_fig=False)

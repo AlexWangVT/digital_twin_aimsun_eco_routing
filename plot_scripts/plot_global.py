@@ -1,12 +1,13 @@
 import pandas as pd
 
+# read summary from all files
 df1 = pd.read_csv('../sim_logs/backups/batch_summary/20230809/summary_demand100.csv')
 df2 = pd.read_csv('../sim_logs/backups/batch_summary/20230809/summary_demand150.csv')
 df3 = pd.read_csv('../sim_logs/backups/batch_summary/20230809/summary_demand50.csv')
-
 df = pd.concat([df1,df2,df3], ignore_index=True)
 # print(df.shape)
 
+# calclulate all statistics
 statistics_df = df.copy(deep=True)
 statistics_df['Overall_Fuel_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
 statistics_df['Overall_Electricity_Reduction'] = statistics_df['Fuel_Used_ICE_Avg(gallon)'].copy()
@@ -25,6 +26,7 @@ for idx in statistics_df.index:
              & (statistics_df['Eco_Routing_with_Travel_Time(0/1)'] == statistics_df['Eco_Routing_with_Travel_Time(0/1)'][idx]) 
              & (statistics_df['Prediction_Horizon(min)'] == statistics_df['Prediction_Horizon(min)'][idx]) 
              & (statistics_df['CAV_Penetration(%)'] == 0)]
+    # extract baseline value for each column
     base_overall_fuel = base_df['Overall_Fuel_Used(gallon)'].values[0]
     base_overall_electricity = base_df['Overall_Electricity_Used(kWh)'].values[0]
     base_ice = base_df['Fuel_Used_ICE_NONCAV_Avg(gallon)'].values[0]
