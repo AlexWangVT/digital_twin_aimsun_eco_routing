@@ -60,7 +60,7 @@ Each Aimsun Scenario has 11 replications, which are for 11 different CAV_Penetra
 
 Vehicle_Fleet need to be manualy changed in the script `script_Modify_CAV_percentage_all_scenario_based_on_scenario_name` around line 15.
 
-Demand_Percentage(%),	Prediction_Horizon(min) and	Eco_Routing_with_Travel_Time(0/1) of a scenario can be quickly set by the scenario name. This will be done by script `script_Modify_CAV_percentage_all_scenario_based_on_scenario_name`, which is already in the simulation package. For example, `DT_Mixed_Fleet_D100_P5` represent a 100% demand, 5min prediction horizon and eco-routing scenario; `DT_Mixed_Fleet_Travel_Time_D50_P10` represent a 50% demand, 10min prediction horizon and travel time routing scenario. (`Travel_Time` needs to be explicitly shown in the scenario name to represent the travel time routing). After setting the correct scenario name, right-click the target scenario and choose `scripts->script_Modify_CAV_percentage_all_scenario_based_on_scenario_name`, this will automaticly extract parameters from the scenario name and populate all needed fields and attributes to the experiments under the target scenario.
+Demand_Percentage(%),	Prediction_Horizon(min) and	Eco_Routing_with_Travel_Time(0/1) of a scenario can be quickly set by the scenario name. This will be done by script `script_Modify_CAV_percentage_all_scenario_based_on_scenario_name`, which is already in the simulation package. For example, `DT_Mixed_Fleet_D100_P5` represent a 100% demand, 5min prediction horizon and eco-routing scenario; `DT_Mixed_Fleet_Travel_Time_D50_P10` represent a 50% demand, 10min prediction horizon and travel time routing scenario. (`Travel_Time` needs to be explicitly present in the scenario name to represent the travel time routing). After setting the correct scenario name, right-click the target scenario and choose `scripts->script_Modify_CAV_percentage_all_scenario_based_on_scenario_name`, this will automaticly extract parameters from the scenario name and populate all needed fields and attributes to all the experiments under the target scenario.
 
 After setting all experiment variables, you can launch all experiments (now there are 11 in each scenario for 11 different CAV penetration) in batch mode in one scenario by right-clicking the scenario and choose `scripts->script_Execute_replications_in_the_target_scenario`. You may also use `script_Execute_all_replications_in_all_scenario` to launch all experiments in multiple scenarios by providing scenario ids.
 
@@ -76,6 +76,9 @@ The distribution among these vehicles are controlled by aimsun `Variables` defin
 1. Experiment attributes: There are 5 user defined attributes for each experiment: cav_penetration, demand_percentage, eco_routing_with_travel_time, prediction_horizon and vehicle_fleet. These are used to send experiment configurations to the API library so that the API will dynamically decide which cost to write. Note that `script_Modify_CAV_percentage_all_scenario_based_on_scenario_name` will help to populate all the attributes. Manual modification of these attributes might not work as intended.
 
 ## API architecture
+
+![API architecture](aimsun_architecture.png)
+
 ### Data structure:
 There are three local classes (Class Network, Class Link, Class Vihicle) which are used to record simulation data, especially for energy-related and cost-related data. 
 

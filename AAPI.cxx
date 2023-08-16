@@ -23,7 +23,6 @@
 using namespace std;
 
 string PROJECT_DIR = "D:\\program\\Aimsun\\digital_twin_aimsun";
-const bool GENERATE_HISTORICAL_DATA = false;
 const double HISTORICAL_DATA_INTERVAL = 60.0; // seconds
 const double PRICE_GAS = 3.5;
 const double PRICE_ELECTRICITY = 0.25;
@@ -33,9 +32,22 @@ const double MOVING_AVERAGE_INTERVAL = 60.0; // seconds
 const double MOVING_AVERAGE_WINDOW = 20 * 60.0; // seconds
 double SIM_STEP = 1.0; // seconds, must be updated in the AAPIInit() function
 
+class Network;
+
+// the network object will be created in AAPIInit() function, deleted in AAPIFinish() function
+// these should be only one instance of the class Network
+Network* network;
+
+void* link_attribute_travel_time;
+void* link_attribute_ice;
+void* link_attribute_bev;
+void* link_attribute_phev;
+void* link_attribute_hfcv;
+
 void printDebugLog(string s);
 
 enum class VehicleType {
+	// these values must be consistent with Aimsun package
 	UNKNOWN = 0,
 	ICE = 393772,
 	BEV = 393773,
@@ -59,6 +71,8 @@ const vector<VehicleType> valid_vehicle_type_list{VEHICLE_TYPE_ICE, VEHICLE_TYPE
 VEHICLE_TYPE_PHEV, VEHICLE_TYPE_PHEV_NONCAV, VEHICLE_TYPE_HFCV, VEHICLE_TYPE_HFCV_NONCAV};
 
 class Vehicle {
+	// class to track vehicle-level properties, will present in class Network and class Link
+	// could be dummy(duplicated) vehicles in situation for specific statitics
 public:
 	Vehicle(int id, VehicleType vehicle_type = VehicleType::UNKNOWN) {
 		id_ = id;
@@ -111,6 +125,8 @@ public:
 };
 
 class Link {
+	// class to track link-level (section-level) properties
+	// each link of Aimsun package will have exact one instance of class Link, and saved in the network
 public:
 	Link(int id) {
 		id_ = id;
@@ -300,6 +316,7 @@ public:
 };
 
 class Network {
+	// track network-level properties, also used to calculate all statistics
 public:
 	Network() {
 		map_vehicles_.clear();
@@ -625,16 +642,6 @@ public:
 	bool eco_routing_with_travel_time_;
 	string vehicle_fleet_;
 };
-Network* network;
-
-double eng_sum[4];
-
-void* link_attribute_travel_time;
-void* link_attribute_ice;
-void* link_attribute_bev;
-void* link_attribute_phev;
-void* link_attribute_hfcv;
-
 
 void printDebugLog(string s) {
 	AKIPrintString(("## Debug log ##: " + s).c_str());
@@ -643,10 +650,10 @@ void printDebugLog(string s) {
 // calculate energy based on vehicle type, energy1 is for gas usage and energy2 is for electricity usage
 void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& energy1, double& energy2, double cur_soc = 0.88)
 {
-	//double spd = 100.0 / 3.6; // in the unit of m/s
-	//double acc = 0;           // in the unit of m/s^2
-	//double grade = 0;         // without percentage
-	//double cur_soc;			// current soc of the vehicle
+	//double spd				// in the unit of m/s
+	//double acc	            // in the unit of m/s^2
+	//double grade				// without percentage
+	//double cur_soc			// current soc of the vehicle
 	energy1 = 0;
 	energy2 = 0;
 
@@ -669,9 +676,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 	double va = 32;                                     // for FHCV, in the unit of km/h
 	double Pa = 2.5, Pb = 5, P_aux = 0.0, P_idle = 0.0; // for FHCV, in the unit of kW
 
-	// test only, TODO: delete or commit this change
-	P_aux = 1.0;
-
 	double grade_sin, grade_cos;
 	double resistance;
 	double P_ice, P_w, P_batt, P_fuel;
@@ -692,8 +696,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		if (P_ice > 0)
 			energy1 = a0 + a1 * P_ice + a2 * pow(P_ice, 2);	// in the unit of liter per second
 		energy1 /= 3.78541;												// now, energy1 is in the unit of gallon per second
-		//cout << "ICE P_ice is :" << P_ice << " kW" << endl;
-		//cout << "ICE Fule of ice is: " << energy1 << " gallon/s" << endl;
 		break;
 
 	case VehicleType::BEV:
@@ -710,10 +712,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000.0;			// now P_W is in the unit of kW
 		
-		// test only, TODO: delete or commit this change
-		if (spd_in_km_per_h == 0) {
-			P_w = P_aux;
-		}
 
 		if (P_w >= 0)
 		{
@@ -727,8 +725,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 				eta_rb = 0;
 			energy2 = P_w * eta_rb; // in the unit of kW
 		}
-		//cout << "PEV P_w is: " << P_w << " kW" << endl;
-		//cout << "PEV electric motor power is: " << energy2 << " kW" << endl;
 		break;
 
 	case VehicleType::PHEV:
@@ -738,10 +734,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// this will assume the battery state-of-charge is always greater than the minimum range
 		// first calculate battery power
 		m = 1860, Af = 2.1851, cd = 0.29;
-
-		//// for test only
-		//// 2015 Nissan Leaf, from fiori2016power paper
-		//m = 1521.0, Af = 2.3316, cd = 0.28;
 
 		a0 = 0.00035218, a1 = 0.000032141, a2 = 0.000001;
 		P_max = 111;		// max electric motor power, in the unit of kW
@@ -753,11 +745,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// To be consistant on the wheel power model, use the model in HFCV model
 		P_w = (m * acc + m * g * cr / 1000.0 * (c1 * spd_in_km_per_h + c2) + 1.0 / 2.0 / 3.6 / 3.6 * rho_air * Af * cd * pow(spd_in_km_per_h, 2) + m * g * grade) * spd_in_km_per_h / 3.6; // P_w is in the unit of Watt, could be negative
 		P_w = P_w / 1000;				// now P_W is in the unit of kW
-
-		// test only, TODO: delete or commit this change
-		if (spd_in_km_per_h == 0) {
-			P_w = P_aux;
-		}
 
 		if (P_w >= 0)
 		{
@@ -792,11 +779,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 			energy2 = P_w * eta_rb * eta_battery; // in the unit of kW, will be charged back to the battery
 			energy1 = 0;
 		}
-
-		//cout << "PHEV P_w is: " << P_w << " kW" << endl;
-		//cout << "PHEV total needed power is: " << temp_total_power << " kW" << endl;
-		//cout << "PHEV needed battery power is: " << energy2 << " kW" << endl;
-		//cout << "PHEV needed fuel of ICE engine is: " << energy1 << " gallon/s" << endl;
 		break;
 
 	case VehicleType::HFCV:
@@ -804,10 +786,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// HFCV energy model
 		// 2017 Toyota Mirai, from ahn2022developing paper
 		m = 1928.0, Af = 2.3316, cd = 0.28;
-		
-		//// for test only
-		//// 2015 Nissan Leaf, from fiori2016power paper
-		//m = 1521.0, Af = 2.3316, cd = 0.28;
 
 		grade_cos = sqrt(1.0 / (1.0 + pow(grade, 2)));
 		grade_sin = sqrt(1.0 - pow(grade_cos, 2));
@@ -854,10 +832,6 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 				eta_rb = 0;
 			energy2 = P_w * eta_rb; // in the unit of kW
 		}
-		//cout << "HFCV P_w is: " << P_w << " kW" << endl;
-		//cout << "HFCV need battery power: " << P_batt << " kW" << endl;
-		//cout << "HFCV fuel cell power is : " << P_fuel << " kW" << endl;
-		//cout << "HFCV total power is : " << energy2 << " kW" << endl;
 		break;
 
 	default:
@@ -878,7 +852,6 @@ void Emission(double spd, double grade, double acc, double& E_ice, double& E_bev
 
 int AAPILoad()
 {
-	// srand((uint32_t)time(NULL));
 	printDebugLog("In AAPILoad()");
 	return 0;
 }
@@ -968,10 +941,6 @@ int AAPIInit()
 		ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, network->map_links_[secid].base_travel_time_);
 		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, network->map_links_[secid].base_travel_time_);
 	}
-
-	// deprecated - historical data method
-	//if (!GENERATE_HISTORICAL_DATA)
-	//	network->loadHistoricalData();
 
 	printDebugLog("Total lenght of all links is : " + to_string(total_link_length) + " meters.");
 
@@ -1124,9 +1093,6 @@ int AAPIUnLoad()
 
 int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 {
-	//printDebugLog("In the func of AAPIPreRouteChoiceCalculation at time " + to_string(time));
-	//printDebugLog("Number of recorded data: " + to_string(network->map_links_[36482].recorded_energy_ice_.size()));
-
 	double timTrans = AKIGetDurationTransTime();
 	if (time < timTrans) // do not update cost in the warm up period
 		return 0;
@@ -1139,12 +1105,6 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 	for (auto& item : network->map_links_) {
 		int secid = item.first;
 		Link& current_link = item.second;
-
-		//A2KSectionInf& secinf = AKIInfNetGetSectionANGInf(secid);
-		//double spd = secinf.speedLimit / 3.6;
-		//double grade = secinf.slopePercentages[0] / 100;
-		//double _free_flow_travel_time_in_s = secinf.length / spd;
-		//double _free_flow_travel_time_in_h = _free_flow_travel_time_in_s / 3600.0;
 
 		// this is the cost for non-cavs and will use base travel time
 		ANGConnSetAttributeValueDouble(link_attribute_travel_time, secid, current_link.base_travel_time_);
@@ -1159,6 +1119,7 @@ int AAPIPreRouteChoiceCalculation(double time, double timeSta)
 			ANGConnSetAttributeValueDouble(link_attribute_hfcv, secid, predicted_values[5] * network->price_electricity_);
 		}
 		else {
+			// if travel time routing, populate all cost attributes with the predicted travel time
 			ANGConnSetAttributeValueDouble(link_attribute_ice, secid, predicted_values[0]);
 			ANGConnSetAttributeValueDouble(link_attribute_bev, secid, predicted_values[0]);
 			ANGConnSetAttributeValueDouble(link_attribute_phev, secid, predicted_values[0]);
@@ -1191,12 +1152,10 @@ int AAPIExitVehicleSection(int idveh, int idsection, double time)
 
 int AAPIEnterPedestrian(int idPedestrian, int originCentroid)
 {
-	AKIPrintString("A Legion Pedestrian has entered the network");
 	return 0;
 }
 
 int AAPIExitPedestrian(int idPedestrian, int destinationCentroid)
 {
-	AKIPrintString("A Legion Pedestrian has exited the network");
 	return 0;
 }
